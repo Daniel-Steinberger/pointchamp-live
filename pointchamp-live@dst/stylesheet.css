@@ -1,0 +1,25 @@
+/* PointChamp Live */
+.pointchamp-menu { min-width: 620px; }
+.pointchamp-header { spacing: 8px; }
+.pointchamp-header-title { font-weight: bold; }
+.pointchamp-nav-button { padding: 4px 8px; border-radius: 999px; background-color: #56565c; }
+.pointchamp-nav-button:hover { background-color: #62626a; }
+.pointchamp-dept-pill { padding: 3px 10px; border-radius: 999px; background-color: #56565c; font-size: 0.85em; font-weight: bold; }
+.pointchamp-row { spacing: 12px; padding: 7px 12px; }
+.pointchamp-row-name { width: 150px; }
+.pointchamp-row-right { width: 76px; text-align: right; color: rgba(255,255,255,0.55); font-size: 0.85em; }
+.pointchamp-axis { padding: 2px 12px 6px; spacing: 12px; }
+.pointchamp-axis-label { color: rgba(255,255,255,0.55); font-size: 0.85em; }
+.pointchamp-dot { width: 10px; height: 10px; border-radius: 999px; margin: 0 3px; }
+.pointchamp-dot-work { background-color: #57e389; }
+.pointchamp-dot-pause { background-color: #ffa348; }
+.pointchamp-dot-done { background-color: rgba(255,255,255,0.35); }
+.pointchamp-status-icon { icon-size: 16px; color: rgba(255,255,255,0.55); }
+.pointchamp-status-icon.work { color: #57e389; }
+.pointchamp-status-icon.pause { color: #ffa348; }
+.pointchamp-legend { spacing: 16px; padding: 4px 12px 8px; color: rgba(255,255,255,0.55); font-size: 0.85em; }
+.pointchamp-legend-item { spacing: 6px; }
+.pointchamp-legend-dot { width: 8px; height: 8px; border-radius: 999px; }
+.pointchamp-now-swatch { width: 2px; height: 10px; background-color: rgba(255,255,255,0.7); }
+.pointchamp-message { color: rgba(255,255,255,0.7); padding: 12px; }
+.pointchamp-indicator-error { opacity: 0.5; }

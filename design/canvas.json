@@ -1,0 +1,64 @@
+{
+  "artboards": [
+    {
+      "file": "Panel.dc.html",
+      "title": "Panel-Indikator · 6 Varianten",
+      "x": 0,
+      "y": 0,
+      "w": 1160,
+      "h": 340
+    },
+    {
+      "file": "Main.dc.html",
+      "title": "Option A · Statusliste",
+      "x": 0,
+      "y": 480,
+      "w": 380,
+      "h": 940
+    },
+    {
+      "file": "OptionB.dc.html",
+      "title": "Option B · Kacheln",
+      "x": 470,
+      "y": 480,
+      "w": 470,
+      "h": 830
+    },
+    {
+      "file": "OptionC.dc.html",
+      "title": "Option C · Tagesleiste",
+      "x": 1030,
+      "y": 480,
+      "w": 600,
+      "h": 620
+    },
+    {
+      "file": "Einstellungen.dc.html",
+      "title": "Einstellungen · Personen",
+      "x": 0,
+      "y": 1560,
+      "w": 700,
+      "h": 780
+    },
+    {
+      "file": "EinstellungenKonto.dc.html",
+      "title": "Einstellungen · Konto & Anzeige",
+      "x": 790,
+      "y": 1560,
+      "w": 700,
+      "h": 780
+    }
+  ],
+  "annotations": [
+    {
+      "id": "hinweis-mockups",
+      "x": 1260,
+      "y": 20,
+      "w": 300,
+      "text": "Statische Mockups im GNOME-Shell-50-Dark-Stil (Werte aus gnome-shell-dark.css, Ubuntu Sans 11, Akzent Blau).\nNamen sind fiktiv, Zeiten entsprechen echten API-Beispielen vom 02.09.\nPopup A, B, C sind Alternativen, Einstellungen gelten für alle."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

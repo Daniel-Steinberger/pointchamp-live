@@ -1,0 +1,9 @@
+{
+  "uuid": "pointchamp-live@dst",
+  "name": "PointChamp Live",
+  "description": "Zeigt im Panel, wer in PointChamp gerade eingestempelt ist: Tagesleiste je Person mit Arbeit, Pause, Homeoffice und Abwesenheiten.",
+  "version": 1,
+  "shell-version": ["50"],
+  "settings-schema": "org.gnome.shell.extensions.pointchamp-live",
+  "url": "https://github.com/dst/pointchamp-live"
+}

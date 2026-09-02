@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="pointchamp-live">
+  <schema id="org.gnome.shell.extensions.pointchamp-live" path="/org/gnome/shell/extensions/pointchamp-live/">
+    <key name="server-url" type="s">
+      <default>'https://dvs.pointchamp.de'</default>
+      <summary>PointChamp-Server</summary>
+    </key>
+    <key name="username" type="s">
+      <default>''</default>
+      <summary>Benutzername (E-Mail) für die externe API</summary>
+    </key>
+    <key name="departments" type="as">
+      <default>[]</default>
+      <summary>Angezeigte Abteilungen (leer = alle)</summary>
+    </key>
+    <key name="known-departments" type="as">
+      <default>[]</default>
+      <summary>Zuletzt von PointChamp gelieferte Abteilungen</summary>
+    </key>
+    <key name="hidden-names" type="as">
+      <default>['Entwickler IT']</default>
+      <summary>Personen, die nie angezeigt werden</summary>
+    </key>
+    <key name="refresh-interval" type="i">
+      <default>60</default>
+      <range min="15" max="900"/>
+      <summary>Aktualisierungsintervall in Sekunden</summary>
+    </key>
+    <key name="day-start" type="i">
+      <default>6</default>
+      <range min="0" max="23"/>
+      <summary>Beginn der Zeitachse (Stunde)</summary>
+    </key>
+    <key name="day-end" type="i">
+      <default>19</default>
+      <range min="1" max="24"/>
+      <summary>Ende der Zeitachse (Stunde)</summary>
+    </key>
+    <key name="show-finished" type="b">
+      <default>true</default>
+      <summary>Personen anzeigen, die heute schon fertig sind</summary>
+    </key>
+    <key name="show-absent" type="b">
+      <default>true</default>
+      <summary>Abwesende anzeigen (Urlaub, Krankheit, …)</summary>
+    </key>
+    <key name="show-not-stamped" type="b">
+      <default>true</default>
+      <summary>Personen ohne Buchung anzeigen</summary>
+    </key>
+  </schema>
+</schemalist>

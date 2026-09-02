@@ -1,0 +1,17 @@
+/* GNOME Shell 50 dark, Werte aus gnome-shell-dark.css */
+body { margin: 0; background: transparent; font-family: "Ubuntu Sans", "Adwaita Sans", Cantarell, system-ui, sans-serif; font-size: 14.67px; color: #ffffff; -webkit-font-smoothing: antialiased; }
+a { color: #78aeed; } a:hover { color: #99c1f1; }
+.popup { background: #36363a; border: 1px solid #424247; border-radius: 20px; box-shadow: 0 2px 4px 0 rgba(0,0,0,.2); padding: 6px; display: flex; flex-direction: column; gap: 0; }
+.item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; min-height: 22px; }
+.item.hover { background: #4f4f55; }
+.sep { height: 1px; background: rgba(255,255,255,.1); margin: 6px 12px; }
+.dim { color: rgba(255,255,255,.55); }
+.small { font-size: 12.5px; }
+.bold { font-weight: 700; }
+.dot { width: 10px; height: 10px; border-radius: 999px; flex: none; }
+.ico { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.badge { width: 32px; height: 32px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex: none; letter-spacing: .2px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; }
+.sub { background: #56565c; border-radius: 12px; padding: 4px; margin: 0 6px 6px; }
+.sub .item { border-radius: 8px; padding: 7px 10px; }
+.heading { padding: 10px 12px 4px; font-size: 12.5px; font-weight: 700; color: rgba(255,255,255,.55); text-transform: uppercase; letter-spacing: .6px; display: flex; align-items: center; justify-content: space-between; }
