@@ -22,7 +22,7 @@ export class PointChampClient {
         this.password = password;
         this._token = null;
         this._tokenTime = 0;
-        this._session = new Soup.Session({timeout: 25, user_agent: 'pointchamp-live-gnome/1'});
+        this._session = new Soup.Session({timeout: 25, user_agent: 'pointchamp-live-gnome/1', max_conns_per_host: 8});
     }
 
     async _request(method, path, {params = null, json = null, bearer = null, cancellable = null} = {}) {
@@ -78,6 +78,26 @@ export class PointChampClient {
         return this._get('/external/api/time/tracking/days', {start: date, end: date}, cancellable);
     }
 
+    /** Stammdaten aller Mitarbeiter (schnell, ~0,2 s): Name, Abteilung, Austrittsdatum. */
+    mastaData(cancellable = null) {
+        return this._get('/external/api/employee/masta/data/', {}, cancellable);
+    }
+
+    /**
+     * Tagesbuchungen nur für die genannten Personen. Der volle Abruf braucht ~10 s (81 Personen),
+     * eine Namenssuche unter 1 s; parallel sind 15 Personen in ~2 s da.
+     * Namenssuche ist Teilstring-Suche, daher wird nach id dedupliziert.
+     */
+    async trackingDaysFor(date, names, cancellable = null) {
+        const results = await Promise.all(names.map(n => this._get('/external/api/time/tracking/days', {start: date, end: date, search: n}, cancellable)));
+        const byId = new Map();
+        for (const list of results) {
+            for (const p of list)
+                byId.set(p.id, p);
+        }
+        return [...byId.values()];
+    }
+
     /** Abwesenheiten im Zeitraum (Standard: nur der Tag). Ein größeres Fenster erlaubt es,
      *  direkt anschließende Abwesenheiten zusammenzufassen. */
     absences(date, endDate = null, cancellable = null) {
@@ -124,6 +144,15 @@ export function nextWorkday(iso) {
     while (dt.get_day_of_week() >= 6)
         dt = dt.add_days(1);
     return dt.format('%Y-%m-%d');
+}
+
+/** Namen (wie in tracking/days) der aktiven Mitarbeiter in den gewählten Abteilungen. */
+export function namesForDepartments(masta, departments, today) {
+    const wanted = new Set(departments);
+    return masta
+        .filter(p => wanted.has(p.department))
+        .filter(p => !p.leavingDate || p.leavingDate >= today)
+        .map(p => normalizeName(`${p.firstname} ${p.lastname}`));
 }
 
 export function normalizeName(name) {

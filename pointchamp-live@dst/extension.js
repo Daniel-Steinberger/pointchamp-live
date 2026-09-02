@@ -10,7 +10,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import {PointChampClient, buildRows, sortRows, formatDuration, describeAbsence, addDays} from './api.js';
+import {PointChampClient, buildRows, sortRows, formatDuration, describeAbsence, addDays, namesForDepartments} from './api.js';
 
 Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async', 'communicate_utf8_finish');
 
@@ -19,7 +19,9 @@ const BAR_HEIGHT = 14;
 const ABSENCE_LOOKAHEAD_DAYS = 60;
 const STARTUP_DELAY_SECONDS = 10;   // Schlüsselbund und Netz nach dem Login erst ankommen lassen
 const PASSWORD_RETRY_SECONDS = 20;  // erneuter Versuch, wenn der Schlüsselbund noch nicht bereit war
-const PASSWORD_RETRY_MAX = 6; // Fenster, um anschließende Abwesenheiten zu erkennen
+const PASSWORD_RETRY_MAX = 6;
+const ROSTER_TTL_SECONDS = 6 * 3600;   // Stammdaten (wer ist in welcher Abteilung) so lange wiederverwenden
+const MAX_TARGETED_PEOPLE = 40;         // darüber ist der volle Abruf nicht langsamer als viele Einzelabfragen // Fenster, um anschließende Abwesenheiten zu erkennen
 const NAME_WIDTH = 150;
 const ICON_WIDTH = 16;
 const ROW_SPACING = 12;
@@ -289,6 +291,16 @@ class Indicator extends PanelMenu.Button {
         return this._client;
     }
 
+    /** Stammdaten: welche Person gehört zu welcher Abteilung. Wird selten neu geladen. */
+    async _getRoster(client) {
+        const nowSec = GLib.get_monotonic_time() / 1e6;
+        if (this._roster && nowSec - this._rosterTime < ROSTER_TTL_SECONDS)
+            return this._roster;
+        this._roster = await client.mastaData(this._cancellable);
+        this._rosterTime = nowSec;
+        return this._roster;
+    }
+
     async _refresh(force) {
         const key = this._dateKey();
         const cached = this._cache.get(key);
@@ -301,13 +313,19 @@ class Indicator extends PanelMenu.Button {
         this._statusLabel.text = 'Lade …';
         try {
             const client = await this._getClient();
+            const roster = await this._getRoster(client);
+            const selected = this._settings.get_strv('departments');
+            const names = selected.length ? namesForDepartments(roster, selected, key) : [];
+            const targeted = selected.length > 0 && names.length > 0 && names.length <= MAX_TARGETED_PEOPLE;
             const [tracking, absences] = await Promise.all([
-                client.trackingDays(key, this._cancellable),
+                targeted
+                    ? client.trackingDaysFor(key, names, this._cancellable)
+                    : client.trackingDays(key, this._cancellable),
                 client.absences(key, addDays(key, ABSENCE_LOOKAHEAD_DAYS), this._cancellable),
             ]);
             if (this._cancellable.is_cancelled())
                 return;
-            const depts = [...new Set(tracking.map(p => p.department).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+            const depts = [...new Set(roster.map(p => p.department).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
             if (JSON.stringify(depts) !== JSON.stringify(this._settings.get_strv('known-departments')))
                 this._settings.set_strv('known-departments', depts);
             this._cache.set(key, {tracking, absences, fetchedAt: nowSec, wallClock: GLib.DateTime.new_now_local()});
