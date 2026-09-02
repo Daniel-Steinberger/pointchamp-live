@@ -24,6 +24,16 @@ Benutzername und Passwort eintragen und „Speichern & prüfen" klicken. Das Pas
 GNOME-Schlüsselbund, die Abteilungsliste wird beim ersten erfolgreichen Abruf gefüllt und kann
 unter „Personen" gefiltert werden.
 
+### Schlüsselbund nur außerhalb der Shell
+
+libsecret darf **nicht** im Shell-Prozess laufen: Beim Login (Schlüsselbund noch nicht bereit)
+stürzte GNOME Shell mit `free(): invalid pointer` in `libgcr-4`/`libgcrypt` ab, GNOME schaltete
+daraufhin alle Erweiterungen ab. Deshalb liest die Erweiterung das Passwort über den
+Helfer-Prozess `secret-helper.js` (`gjs -m secret-helper.js lookup <server> <user>`, Exit 0/2/1).
+`secret.js` mit dem libsecret-Code wird nur vom Helfer und von `prefs.js` importiert.
+Die erste Abfrage startet 10 s nach dem Laden, bei fehlendem Passwort wird bis zu sechsmal
+im Abstand von 20 s erneut versucht.
+
 ## Testen ohne Ab- und Anmelden
 
 Headless-Shell mit eigener D-Bus-Sitzung und isolierten GSettings (keyfile-Backend), damit die

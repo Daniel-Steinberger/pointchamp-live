@@ -4,7 +4,8 @@ import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
-import {PointChampClient, lookupPassword, storePassword} from './api.js';
+import {PointChampClient} from './api.js';
+import {lookupPassword, storePassword} from './secret.js';
 
 export default class PointChampLivePrefs extends ExtensionPreferences {
     fillPreferencesWindow(window) {

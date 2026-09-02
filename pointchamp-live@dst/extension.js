@@ -10,11 +10,16 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import {PointChampClient, lookupPassword, buildRows, sortRows, formatDuration, describeAbsence, addDays} from './api.js';
+import {PointChampClient, buildRows, sortRows, formatDuration, describeAbsence, addDays} from './api.js';
+
+Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async', 'communicate_utf8_finish');
 
 const BAR_WIDTH = 300;
 const BAR_HEIGHT = 14;
-const ABSENCE_LOOKAHEAD_DAYS = 60; // Fenster, um anschließende Abwesenheiten zu erkennen
+const ABSENCE_LOOKAHEAD_DAYS = 60;
+const STARTUP_DELAY_SECONDS = 10;   // Schlüsselbund und Netz nach dem Login erst ankommen lassen
+const PASSWORD_RETRY_SECONDS = 20;  // erneuter Versuch, wenn der Schlüsselbund noch nicht bereit war
+const PASSWORD_RETRY_MAX = 6; // Fenster, um anschließende Abwesenheiten zu erkennen
 const NAME_WIDTH = 150;
 const ICON_WIDTH = 16;
 const ROW_SPACING = 12;
@@ -135,8 +140,14 @@ class Indicator extends PanelMenu.Button {
             this._refresh(true);
         });
 
+        this._passwordRetries = 0;
+        this._retryId = 0;
         this._render();
-        this._refresh(true);
+        this._startupId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, STARTUP_DELAY_SECONDS, () => {
+            this._startupId = 0;
+            this._refresh(true);
+            return GLib.SOURCE_REMOVE;
+        });
         this._startTimer();
     }
 
@@ -243,6 +254,24 @@ class Indicator extends PanelMenu.Button {
     }
 
     // ------------------------------------------------------------ Daten
+    /** Passwort über den Helfer-Prozess holen (libsecret läuft dort, nicht in der Shell). */
+    async _lookupPassword(server, username) {
+        const helper = GLib.build_filenamev([this._ext.path, 'secret-helper.js']);
+        const proc = Gio.Subprocess.new(
+            ['gjs', '-m', helper, 'lookup', server, username],
+            Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
+        const [stdout, stderr] = await proc.communicate_utf8_async(null, this._cancellable);
+        const status = proc.get_exit_status();
+        if (status === 0)
+            return stdout.replace(/\n$/, '');
+        if (status === 2)
+            return null;
+        // Auch Helfer-Fehler (z. B. Schlüsselbund noch nicht gestartet) werden nach dem Login erneut versucht
+        const e = new Error(`Schlüsselbund-Helfer: ${stderr.trim() || `Exit ${status}`}`);
+        e.passwordMissing = true;
+        throw e;
+    }
+
     async _getClient() {
         if (this._client)
             return this._client;
@@ -250,9 +279,12 @@ class Indicator extends PanelMenu.Button {
         const username = this._settings.get_string('username');
         if (!server || !username)
             throw new Error('Zugangsdaten fehlen. Bitte in den Einstellungen eintragen.');
-        const password = await lookupPassword(server, username);
-        if (!password)
-            throw new Error(`Kein Passwort für ${username} im Schlüsselbund.`);
+        const password = await this._lookupPassword(server, username);
+        if (!password) {
+            const e = new Error(`Kein Passwort für ${username} im Schlüsselbund.`);
+            e.passwordMissing = true;
+            throw e;
+        }
         this._client = new PointChampClient(server, username, password);
         return this._client;
     }
@@ -287,6 +319,15 @@ class Indicator extends PanelMenu.Button {
             this._lastError = e.message ?? String(e);
             this._icon.add_style_class_name('pointchamp-indicator-error');
             console.warn(`[pointchamp-live] ${this._lastError}`);
+            if (e.passwordMissing && this._passwordRetries < PASSWORD_RETRY_MAX && !this._retryId) {
+                // Direkt nach dem Login ist der Schlüsselbund oft noch nicht entsperrt
+                this._passwordRetries++;
+                this._retryId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, PASSWORD_RETRY_SECONDS, () => {
+                    this._retryId = 0;
+                    this._refresh(true);
+                    return GLib.SOURCE_REMOVE;
+                });
+            }
         } finally {
             this._loading = false;
         }
@@ -436,6 +477,12 @@ class Indicator extends PanelMenu.Button {
 
     destroy() {
         this._stopTimer();
+        for (const key of ['_startupId', '_retryId']) {
+            if (this[key]) {
+                GLib.source_remove(this[key]);
+                this[key] = 0;
+            }
+        }
         this._cancellable.cancel();
         if (this._settingsChangedId)
             this._settings.disconnect(this._settingsChangedId);

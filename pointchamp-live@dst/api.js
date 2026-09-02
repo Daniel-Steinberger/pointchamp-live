@@ -1,43 +1,12 @@
 // PointChamp-Client für die externe API (Soup 3). Wird von extension.js und prefs.js benutzt,
-// darf daher nichts aus der Shell importieren.
+// darf daher nichts aus der Shell importieren – und kein libsecret (siehe secret.js).
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import Soup from 'gi://Soup?version=3.0';
-import Secret from 'gi://Secret';
 
 Gio._promisify(Soup.Session.prototype, 'send_and_read_async', 'send_and_read_finish');
 
 const TOKEN_TTL_SECONDS = 50 * 60; // Token gilt 60 min, wir erneuern nach 50
-
-export const SECRET_SCHEMA = new Secret.Schema(
-    'org.gnome.shell.extensions.pointchamp-live',
-    Secret.SchemaFlags.NONE,
-    {server: Secret.SchemaAttributeType.STRING, username: Secret.SchemaAttributeType.STRING});
-
-export function lookupPassword(server, username) {
-    return new Promise((resolve, reject) => {
-        Secret.password_lookup(SECRET_SCHEMA, {server, username}, null, (_src, res) => {
-            try {
-                resolve(Secret.password_lookup_finish(res));
-            } catch (e) {
-                reject(e);
-            }
-        });
-    });
-}
-
-export function storePassword(server, username, password) {
-    return new Promise((resolve, reject) => {
-        Secret.password_store(SECRET_SCHEMA, {server, username}, Secret.COLLECTION_DEFAULT,
-            `PointChamp Live (${username})`, password, null, (_src, res) => {
-                try {
-                    resolve(Secret.password_store_finish(res));
-                } catch (e) {
-                    reject(e);
-                }
-            });
-    });
-}
 
 export class ApiError extends Error {
     constructor(message, status) {
