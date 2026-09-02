@@ -109,9 +109,10 @@ export class PointChampClient {
         return this._get('/external/api/time/tracking/days', {start: date, end: date}, cancellable);
     }
 
-    /** Abwesenheiten, die den Tag berühren. */
-    absences(date, cancellable = null) {
-        return this._get('/external/api/employee/absence/', {start: date, end: date}, cancellable);
+    /** Abwesenheiten im Zeitraum (Standard: nur der Tag). Ein größeres Fenster erlaubt es,
+     *  direkt anschließende Abwesenheiten zusammenzufassen. */
+    absences(date, endDate = null, cancellable = null) {
+        return this._get('/external/api/employee/absence/', {start: date, end: endDate ?? date}, cancellable);
     }
 }
 
@@ -127,6 +128,35 @@ function parseDeDate(s) {
     return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
+const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+
+function isoToDateTime(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return GLib.DateTime.new_local(y, m, d, 0, 0, 0);
+}
+
+export function addDays(iso, n) {
+    return isoToDateTime(iso).add_days(n).format('%Y-%m-%d');
+}
+
+export function daysBetween(fromIso, toIso) {
+    return Math.round(isoToDateTime(toIso).difference(isoToDateTime(fromIso)) / GLib.TIME_SPAN_DAY);
+}
+
+/** „Fr, 04.09." */
+export function formatDateShort(iso) {
+    const dt = isoToDateTime(iso);
+    return `${WEEKDAYS[dt.get_day_of_week() % 7]}, ${dt.format('%d.%m.')}`;
+}
+
+/** Nächster Werktag (Mo–Fr) nach dem Datum; Feiertage werden nicht berücksichtigt. */
+export function nextWorkday(iso) {
+    let dt = isoToDateTime(iso).add_days(1);
+    while (dt.get_day_of_week() >= 6)
+        dt = dt.add_days(1);
+    return dt.format('%Y-%m-%d');
+}
+
 export function normalizeName(name) {
     return name.replace(/\s+/g, ' ').trim();
 }
@@ -137,11 +167,15 @@ export function normalizeName(name) {
  *   status ∈ 'work' | 'pause' | 'done' | 'absent' | 'none'
  */
 export function buildRows(tracking, absences, date, nowHours) {
-    const absByName = new Map();
+    const absByName = new Map(); // Name → Arten, die den Tag berühren
+    const allByName = new Map(); // Name → alle Abwesenheiten {von, bis, art}
     for (const a of absences ?? []) {
         const von = parseDeDate(a.von), bis = parseDeDate(a.bis);
+        const key = normalizeName(a.name);
+        if (!allByName.has(key))
+            allByName.set(key, []);
+        allByName.get(key).push({von, bis, art: a.art});
         if (von <= date && date <= bis) {
-            const key = normalizeName(a.name);
             if (!absByName.has(key))
                 absByName.set(key, []);
             absByName.get(key).push(a.art);
@@ -182,8 +216,28 @@ export function buildRows(tracking, absences, date, nowHours) {
             status = 'absent';
 
         const workedMinutes = Math.round(segments.filter(s => !s.pause).reduce((sum, s) => sum + (s.end - s.start) * 60, 0));
+
+        // Ende der zusammenhängenden Abwesenheit: direkt anschließende Einträge (z. B. Urlaub + Resturlaub) zusammenfassen
+        let absenceUntil = null;
+        if (absence) {
+            const own = (allByName.get(name) ?? []).filter(a => a.art !== 'Homeoffice*');
+            absenceUntil = own.filter(a => a.von <= date && date <= a.bis).map(a => a.bis).sort().pop();
+            let extended = true;
+            while (extended) {
+                extended = false;
+                // Wochenenden überbrücken: eine Abwesenheit ab dem nächsten Werktag schließt an
+                const next = nextWorkday(absenceUntil);
+                for (const a of own) {
+                    if (a.von <= next && a.bis > absenceUntil) {
+                        absenceUntil = a.bis;
+                        extended = true;
+                    }
+                }
+            }
+        }
         rows.push({
             name, department: p.department, status, segments, absence, plannedHome, workedMinutes,
+            absenceUntil, returnDate: absenceUntil ? nextWorkday(absenceUntil) : null,
             dayStart: day?.start ?? null, dayEnd: day?.end ?? null,
         });
     }
@@ -193,6 +247,17 @@ export function buildRows(tracking, absences, date, nowHours) {
 export function formatDuration(minutes) {
     const h = Math.floor(minutes / 60), m = minutes % 60;
     return `${h} h ${String(m).padStart(2, '0')}`;
+}
+
+/** Beschriftung über der Abwesenheitsleiste, z. B. „bis Fr, 04.09. · noch 3 Tage · zurück Mo, 07.09." */
+export function describeAbsence(row, date) {
+    if (!row.absenceUntil)
+        return '';
+    const back = `zurück ${formatDateShort(row.returnDate)}`;
+    if (row.absenceUntil === date)
+        return `letzter Tag · ${back}`;
+    const remaining = daysBetween(date, row.absenceUntil) + 1;
+    return `bis ${formatDateShort(row.absenceUntil)} · noch ${remaining} Tage · ${back}`;
 }
 
 export const STATUS_ORDER = {work: 0, pause: 1, done: 2, none: 3, absent: 4};

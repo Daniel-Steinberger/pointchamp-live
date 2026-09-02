@@ -10,10 +10,11 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import {PointChampClient, lookupPassword, buildRows, sortRows, formatDuration} from './api.js';
+import {PointChampClient, lookupPassword, buildRows, sortRows, formatDuration, describeAbsence, addDays} from './api.js';
 
 const BAR_WIDTH = 300;
 const BAR_HEIGHT = 14;
+const ABSENCE_LOOKAHEAD_DAYS = 60; // Fenster, um anschließende Abwesenheiten zu erkennen
 const NAME_WIDTH = 150;
 const ICON_WIDTH = 16;
 const ROW_SPACING = 12;
@@ -270,7 +271,7 @@ class Indicator extends PanelMenu.Button {
             const client = await this._getClient();
             const [tracking, absences] = await Promise.all([
                 client.trackingDays(key, this._cancellable),
-                client.absences(key, this._cancellable),
+                client.absences(key, addDays(key, ABSENCE_LOOKAHEAD_DAYS), this._cancellable),
             ]);
             if (this._cancellable.is_cancelled())
                 return;
@@ -383,7 +384,19 @@ class Indicator extends PanelMenu.Button {
         const item = new PopupMenu.PopupBaseMenuItem({style_class: 'pointchamp-row', can_focus: true});
         item.add_child(this._statusMarker(row));
         item.add_child(new St.Label({text: row.name, style_class: 'pointchamp-row-name', y_align: Clutter.ActorAlign.CENTER}));
-        item.add_child(new Timeline(row, dayStart, dayEnd, nowHours));
+        const timeline = new Timeline(row, dayStart, dayEnd, nowHours);
+        if (row.status === 'absent') {
+            // Beschriftung über der schraffierten Leiste
+            const stack = new St.Widget({layout_manager: new Clutter.BinLayout(), width: BAR_WIDTH, height: BAR_HEIGHT, y_align: Clutter.ActorAlign.CENTER});
+            stack.add_child(timeline);
+            stack.add_child(new St.Label({
+                text: describeAbsence(row, this._dateKey()), style_class: 'pointchamp-bar-text',
+                x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER,
+            }));
+            item.add_child(stack);
+        } else {
+            item.add_child(timeline);
+        }
         item.add_child(new St.Label({text: this._rightText(row), style_class: 'pointchamp-row-right', y_align: Clutter.ActorAlign.CENTER}));
         item.connect('activate', () => this._openWeb());
         return item;
