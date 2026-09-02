@@ -15,7 +15,7 @@ Zugangsdaten stehen dort im Klartext – **nicht** hierher kopieren.
 | `anwvs/bin/pointchamp_abwesenheiten_sync.py`, `dvs_openproject/op_abwesenheiten.py` | Abwesenheiten → OpenProject |
 | `dvs-ansible/playbooks/files/dvs-config@*.py` | Konfiguration (URLs, Login) |
 
-Technischer Ansprechpartner laut Docstring: Tim Strakerjahn (PointChamp).
+Technischer Ansprechpartner steht im Docstring von `dvs_pointchamp/api.py`.
 
 ## Externe API (`/external/api/…`, Swagger 2.0 unter `/api/doc`, nur nach Web-Login sichtbar)
 
@@ -34,7 +34,7 @@ Auth: `POST /external/api/login_check` mit `{"username","password"}` → `{"toke
 ### `tracking/days` im Detail (Kern für die Live-Ansicht)
 
 ```json
-{"id": 71, "personnelNumber": "2126", "name": "Vorname Nachname", "department": "IT",
+{"id": 1, "personnelNumber": "1234", "name": "Vorname Nachname", "department": "IT",
  "workingTimeAccount": 792,
  "days": {"2026-09-02": {"date": "2026-09-02", "start": "09:13:47", "end": "13:09:44",
     "break": "0", "sum": "517", "must": 480, "actual": 286, "difference": -194,
@@ -94,7 +94,7 @@ Freistellung, **Homeoffice\*** (geplanter Homeoffice-Tag wird als Abwesenheit ge
 
 Empfehlung: **Externe API als Grundlage** (alles außer der tatsächlichen Stempel-Kategorie),
 die geplanten Homeoffice-Tage aus `absence` beimischen. Die Web-Live-Ansicht nur optional
-als zweite Quelle für die Kategorie Homeoffice/Office/Unterwegs, oder PointChamp (Tim Strakerjahn)
+als zweite Quelle für die Kategorie Homeoffice/Office/Unterwegs, oder PointChamp
 bitten, die Kategorie in `tracking/days.detail` aufzunehmen.
 
 Offene Frage: eigenes PointChamp-Konto des Nutzers statt des geteilten Service-Kontos verwenden?
