@@ -10,7 +10,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import {PointChampClient, buildRows, sortRows, formatDuration, describeAbsence, addDays, namesForDepartments} from './api.js';
+import {PointChampClient, buildRows, sortRows, formatDuration, describeAbsence, addDays, namesForDepartments, tagColor} from './api.js';
 
 Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async', 'communicate_utf8_finish');
 
@@ -22,7 +22,7 @@ const PASSWORD_RETRY_SECONDS = 20;  // erneuter Versuch, wenn der Schlüsselbund
 const PASSWORD_RETRY_MAX = 6;
 const ROSTER_TTL_SECONDS = 6 * 3600;   // Stammdaten (wer ist in welcher Abteilung) so lange wiederverwenden
 const MAX_TARGETED_PEOPLE = 40;         // darüber ist der volle Abruf nicht langsamer als viele Einzelabfragen // Fenster, um anschließende Abwesenheiten zu erkennen
-const NAME_WIDTH = 150;
+const NAME_WIDTH = 210;
 const ICON_WIDTH = 16;
 const ROW_SPACING = 12;
 const COLORS = {
@@ -137,6 +137,12 @@ class Indicator extends PanelMenu.Button {
         this._settingsChangedId = this._settings.connect('changed', (_s, key) => {
             if (['server-url', 'username'].includes(key))
                 this._client = null;
+            if (key.startsWith('known-'))
+                return;
+            if (key === 'person-tags') {
+                this._render();
+                return;
+            }
             this._cache.clear();
             this._render();
             this._refresh(true);
@@ -350,6 +356,12 @@ class Indicator extends PanelMenu.Button {
             const depts = [...new Set(roster.map(p => p.department).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
             if (JSON.stringify(depts) !== JSON.stringify(this._settings.get_strv('known-departments')))
                 this._settings.set_strv('known-departments', depts);
+            const persons = roster
+                .filter(p => !p.leavingDate || p.leavingDate >= key)
+                .map(p => `${p.firstname} ${p.lastname}`.replace(/\s+/g, ' ').trim() + '\t' + (p.department ?? ''))
+                .sort((a, b) => a.localeCompare(b, 'de'));
+            if (JSON.stringify(persons) !== JSON.stringify(this._settings.get_strv('known-persons')))
+                this._settings.set_strv('known-persons', persons);
             this._cache.set(key, {tracking, absences, fetchedAt: nowSec, wallClock: GLib.DateTime.new_now_local()});
             this._lastError = null;
             this._icon.remove_style_class_name('pointchamp-indicator-error');
@@ -488,7 +500,7 @@ class Indicator extends PanelMenu.Button {
     _makeRow(row, dayStart, dayEnd, nowHours) {
         const item = new PopupMenu.PopupBaseMenuItem({style_class: 'pointchamp-row', can_focus: true});
         item.add_child(this._statusMarker(row));
-        item.add_child(new St.Label({text: row.name, style_class: 'pointchamp-row-name', y_align: Clutter.ActorAlign.CENTER}));
+        item.add_child(this._nameColumn(row));
         const timeline = new Timeline(row, dayStart, dayEnd, nowHours);
         if (row.status === 'absent') {
             // Beschriftung über der schraffierten Leiste
@@ -505,6 +517,30 @@ class Indicator extends PanelMenu.Button {
         item.add_child(new St.Label({text: this._rightText(row), style_class: 'pointchamp-row-right', y_align: Clutter.ActorAlign.CENTER}));
         item.connect('activate', () => this._openWeb());
         return item;
+    }
+
+    /** Name plus Tag-Badges aus den Einstellungen. */
+    _nameColumn(row) {
+        const box = new St.BoxLayout({style_class: 'pointchamp-row-name', y_align: Clutter.ActorAlign.CENTER});
+        const name = new St.Label({text: row.name, y_align: Clutter.ActorAlign.CENTER});
+        name.clutter_text.ellipsize = 3; // Pango.EllipsizeMode.END
+        box.add_child(name);
+        const tags = this._personTags()[row.name] ?? [];
+        for (const tag of tags) {
+            box.add_child(new St.Label({
+                text: tag, style_class: 'pointchamp-tag', y_align: Clutter.ActorAlign.CENTER,
+                style: `background-color: ${tagColor(tag)};`,
+            }));
+        }
+        return box;
+    }
+
+    _personTags() {
+        if (!this._tagsCache) {
+            this._tagsCache = this._settings.get_value('person-tags').deepUnpack();
+            this._tagsCacheId = this._settings.connect('changed::person-tags', () => (this._tagsCache = null));
+        }
+        return this._tagsCache;
     }
 
     _statusMarker(row) {
@@ -551,6 +587,8 @@ class Indicator extends PanelMenu.Button {
         this._cancellable.cancel();
         if (this._settingsChangedId)
             this._settings.disconnect(this._settingsChangedId);
+        if (this._tagsCacheId)
+            this._settings.disconnect(this._tagsCacheId);
         super.destroy();
     }
 });

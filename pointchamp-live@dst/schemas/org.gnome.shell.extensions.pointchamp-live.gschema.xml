@@ -48,5 +48,13 @@
       <default>true</default>
       <summary>Personen ohne Buchung anzeigen</summary>
     </key>
+    <key name="person-tags" type="a{sas}">
+      <default>{}</default>
+      <summary>Tags je Person (Name → Liste von Tags), z. B. Bestand, medVS, StBVS</summary>
+    </key>
+    <key name="known-persons" type="as">
+      <default>[]</default>
+      <summary>Zuletzt bekannte Personen als „Name\tAbteilung" (für die Tag-Zuordnung in den Einstellungen)</summary>
+    </key>
   </schema>
 </schemalist>
