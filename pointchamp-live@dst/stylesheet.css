@@ -22,5 +22,19 @@
 .pointchamp-legend-dot { width: 8px; height: 8px; border-radius: 999px; }
 .pointchamp-now-swatch { width: 2px; height: 10px; background-color: rgba(255,255,255,0.7); }
 .pointchamp-bar-text { font-size: 0.78em; color: rgba(255,255,255,0.92); background-color: rgba(54,54,58,0.85); border-radius: 4px; padding: 0 6px; }
+.pointchamp-heading { font-weight: bold; color: rgba(255,255,255,0.7); font-size: 0.85em; padding: 2px 0; }
 .pointchamp-message { color: rgba(255,255,255,0.7); padding: 12px; }
 .pointchamp-indicator-error { opacity: 0.5; }
+
+/* Anträge */
+.pointchamp-panel-box { }
+.pointchamp-panel-dot { width: 8px; height: 8px; border-radius: 999px; background-color: #f66151; margin: 3px 0 0 -6px; }
+.pointchamp-request-row { spacing: 12px; padding: 7px 12px; }
+.pointchamp-request-text { }
+.pointchamp-request-sub { color: rgba(255,255,255,0.55); font-size: 0.85em; }
+.pointchamp-request-button { padding: 4px 10px; border-radius: 999px; background-color: #56565c; font-weight: bold; font-size: 0.85em; }
+.pointchamp-request-button:hover { background-color: #62626a; }
+.pointchamp-request-button.accept { background-color: rgba(87,227,137,0.25); }
+.pointchamp-request-button.decline { background-color: rgba(246,97,81,0.25); }
+.pointchamp-request-button.confirm { background-color: #f66151; color: #ffffff; }
+.pointchamp-request-button:insensitive { opacity: 0.5; }

@@ -14,6 +14,7 @@ export default class PointChampLivePrefs extends ExtensionPreferences {
         window.add(this._accountPage(settings));
         window.add(this._peoplePage(settings));
         window.add(this._displayPage(settings));
+        window.add(this._approvalsPage(settings));
     }
 
     // ------------------------------------------------------------ Konto
@@ -111,6 +112,30 @@ export default class PointChampLivePrefs extends ExtensionPreferences {
             settings.set_strv('hidden-names', hidden.text.split(',').map(s => s.trim()).filter(Boolean));
         });
         single.add(hidden);
+        return page;
+    }
+
+    // ------------------------------------------------------------ Anträge
+    _approvalsPage(settings) {
+        const page = new Adw.PreferencesPage({title: 'Anträge', icon_name: 'emblem-ok-symbolic'});
+        const group = new Adw.PreferencesGroup({
+            title: 'Anträge zur Überprüfung',
+            description: 'Urlaubsanträge und sonstige Ab-/Anwesenheiten (z. B. Freizeitausgleich) aus dem Adminstudio. '
+                + 'Dafür meldet sich die Erweiterung mit deinem Konto in der Web-Oberfläche an; Genehmigen und Ablehnen erfolgen in deinem Namen.',
+        });
+        page.add(group);
+        const enable = new Adw.SwitchRow({title: 'Anträge abrufen', subtitle: 'Nur sinnvoll, wenn dein Konto Anträge genehmigen darf'});
+        settings.bind('approvals-enabled', enable, 'active', Gio.SettingsBindFlags.DEFAULT);
+        group.add(enable);
+        const interval = new Adw.SpinRow({
+            title: 'Intervall', subtitle: 'Sekunden zwischen zwei Abfragen',
+            adjustment: new Gtk.Adjustment({lower: 60, upper: 3600, step_increment: 60}),
+        });
+        settings.bind('approvals-interval', interval, 'value', Gio.SettingsBindFlags.DEFAULT);
+        group.add(interval);
+        const notify = new Adw.SwitchRow({title: 'Benachrichtigung bei neuen Anträgen'});
+        settings.bind('approvals-notify', notify, 'active', Gio.SettingsBindFlags.DEFAULT);
+        group.add(notify);
         return page;
     }
 

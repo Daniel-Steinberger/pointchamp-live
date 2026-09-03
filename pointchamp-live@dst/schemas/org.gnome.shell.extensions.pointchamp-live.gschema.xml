@@ -48,5 +48,18 @@
       <default>true</default>
       <summary>Personen ohne Buchung anzeigen</summary>
     </key>
+    <key name="approvals-enabled" type="b">
+      <default>false</default>
+      <summary>Anträge zur Überprüfung über die Web-Oberfläche abrufen (Login mit dem eigenen Konto)</summary>
+    </key>
+    <key name="approvals-interval" type="i">
+      <default>300</default>
+      <range min="60" max="3600"/>
+      <summary>Abfrageintervall für Anträge in Sekunden</summary>
+    </key>
+    <key name="approvals-notify" type="b">
+      <default>true</default>
+      <summary>Bei neuen Anträgen eine Benachrichtigung zeigen</summary>
+    </key>
   </schema>
 </schemalist>
