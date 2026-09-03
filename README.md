@@ -61,6 +61,24 @@ der `changed`-Handler leert den Cache.
 
 Alternativ: `dbus-run-session -- gnome-shell --nested --wayland` öffnet die Shell in einem Fenster.
 
+## Anträge zur Überprüfung (Feature-Branch `feature/antraege`)
+
+Die externe API kennt keine Anträge. Die Erweiterung meldet sich deshalb optional mit dem eigenen
+Konto in der Web-Oberfläche an (`web.js`, Session-Cookie, Re-Login nach 15 min Inaktivität) und liest
+die Admin-Seiten `/de/administration/holiday/` (Urlaubsanträge) und `/de/administration/illness/open`
+(sonstige Ab-/Anwesenheiten wie Freizeitausgleich). Aus dem „Open"-Bereich werden Zähler und
+Tabellenzeilen mit Checkbox-IDs geparst.
+
+Genehmigen/Ablehnen nutzt dieselben Aufrufe wie die Web-Oberfläche:
+`POST /de/administration/holiday/batch/acceppt|decline` mit `holidaysIDS[]` bzw.
+`POST /de/administration/absence/batch/acceppt|decline` mit `absenceIDS[]` (Antwort JSON mit den
+noch offenen IDs). Im Menü hat jede Antragszeile zwei Knöpfe mit zweistufiger Bestätigung
+(„Wirklich?" innerhalb von 5 s). Offene Anträge zeigen einen roten Punkt am Panel-Symbol und
+optional eine GNOME-Benachrichtigung. Einschalten unter Einstellungen → Anträge.
+
+Der Zeilen-Parser wurde gegen eine nachgebaute offene Zeile geprüft, weil beim Bau kein echter
+Antrag offen war; der erste echte Antrag sollte im Menü kontrolliert werden.
+
 ## Bekannte Grenzen des Prototyps
 
 - Die tatsächliche Stempel-Kategorie (Homeoffice/Office/Unterwegs) liefert die externe API nicht;

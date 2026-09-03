@@ -217,7 +217,7 @@ export function buildRows(tracking, absences, date, nowHours) {
         else if (absence)
             status = 'absent';
 
-        const workedMinutes = Math.round(segments.filter(s => !s.pause).reduce((sum, s) => sum + (s.end - s.start) * 60, 0));
+        const workedMinutes = Math.max(0, Math.round(segments.filter(s => !s.pause).reduce((sum, s) => sum + (s.end - s.start) * 60, 0)));
 
         // Ende der zusammenhängenden Abwesenheit: direkt anschließende Einträge (z. B. Urlaub + Resturlaub) zusammenfassen
         let absenceUntil = null;
