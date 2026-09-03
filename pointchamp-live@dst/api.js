@@ -88,13 +88,17 @@ export class PointChampClient {
      * eine Namenssuche unter 1 s; parallel sind 15 Personen in ~2 s da.
      * Namenssuche ist Teilstring-Suche, daher wird nach id dedupliziert.
      */
-    async trackingDaysFor(date, names, cancellable = null) {
-        const results = await Promise.all(names.map(n => this._get('/external/api/time/tracking/days', {start: date, end: date, search: n}, cancellable)));
+    async trackingDaysFor(date, names, cancellable = null, onProgress = null) {
         const byId = new Map();
-        for (const list of results) {
+        let done = 0;
+        await Promise.all(names.map(async n => {
+            const list = await this._get('/external/api/time/tracking/days', {start: date, end: date, search: n}, cancellable);
             for (const p of list)
                 byId.set(p.id, p);
-        }
+            done++;
+            // Teilergebnis melden, damit die Oberfläche schon anzeigen kann, was da ist
+            onProgress?.([...byId.values()], done, names.length);
+        }));
         return [...byId.values()];
     }
 
@@ -258,7 +262,7 @@ export function describeAbsence(row, date) {
     return `bis ${formatDateShort(row.absenceUntil)} · noch ${remaining} Tage · ${back}`;
 }
 
-export const STATUS_ORDER = {work: 0, pause: 1, done: 2, none: 3, absent: 4};
+export const STATUS_ORDER = {work: 0, pause: 1, done: 2, none: 3, absent: 4, loading: 5};
 
 export function sortRows(rows) {
     return rows.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.name.localeCompare(b.name, 'de'));

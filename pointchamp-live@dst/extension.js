@@ -317,12 +317,34 @@ class Indicator extends PanelMenu.Button {
             const selected = this._settings.get_strv('departments');
             const names = selected.length ? namesForDepartments(roster, selected, key) : [];
             const targeted = selected.length > 0 && names.length > 0 && names.length <= MAX_TARGETED_PEOPLE;
-            const [tracking, absences] = await Promise.all([
-                targeted
-                    ? client.trackingDaysFor(key, names, this._cancellable)
-                    : client.trackingDays(key, this._cancellable),
-                client.absences(key, addDays(key, ABSENCE_LOOKAHEAD_DAYS), this._cancellable),
-            ]);
+            // Fortlaufende Anzeige: Gibt es für den Tag noch keine vollständigen Daten, wird jede
+            // eintreffende Antwort sofort gezeigt. Bei einer Hintergrund-Aktualisierung mit vorhandenen
+            // Daten wird dagegen erst am Ende umgeschaltet, damit nichts flackert.
+            const progressive = !cached;
+            const partial = {tracking: [], absences: [], fetchedAt: 0, wallClock: GLib.DateTime.new_now_local(), loading: true, done: 0, total: targeted ? names.length : 1, names};
+            if (progressive) {
+                this._cache.set(key, partial);
+                this._render();
+            }
+            const showPartial = () => {
+                if (progressive && this._cache.get(key) === partial && key === this._dateKey())
+                    this._scheduleRender();
+            };
+            const trackingPromise = targeted
+                ? client.trackingDaysFor(key, names, this._cancellable, (list, done, total) => {
+                    partial.tracking = list;
+                    partial.done = done;
+                    partial.total = total;
+                    showPartial();
+                })
+                : client.trackingDays(key, this._cancellable);
+            const absencePromise = client.absences(key, addDays(key, ABSENCE_LOOKAHEAD_DAYS), this._cancellable)
+                .then(list => {
+                    partial.absences = list;
+                    showPartial();
+                    return list;
+                });
+            const [tracking, absences] = await Promise.all([trackingPromise, absencePromise]);
             if (this._cancellable.is_cancelled())
                 return;
             const depts = [...new Set(roster.map(p => p.department).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
@@ -334,6 +356,8 @@ class Indicator extends PanelMenu.Button {
         } catch (e) {
             if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                 return;
+            if (this._cache.get(key)?.loading)
+                this._cache.delete(key);
             this._lastError = e.message ?? String(e);
             this._icon.add_style_class_name('pointchamp-indicator-error');
             console.warn(`[pointchamp-live] ${this._lastError}`);
@@ -370,6 +394,17 @@ class Indicator extends PanelMenu.Button {
     }
 
     // ------------------------------------------------------------ Darstellung
+    /** Rendern bündeln, wenn viele Antworten kurz hintereinander eintreffen. */
+    _scheduleRender() {
+        if (this._renderId)
+            return;
+        this._renderId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 120, () => {
+            this._renderId = 0;
+            this._render();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
     _render() {
         this._title.text = this._titleText();
         const depts = this._settings.get_strv('departments');
@@ -396,7 +431,15 @@ class Indicator extends PanelMenu.Button {
 
         const hidden = new Set(this._settings.get_strv('hidden-names'));
         let rows = buildRows(cached.tracking, cached.absences, this._dateKey(), this._isToday() ? nowHours : dayEnd);
-        rows = rows.filter(r => !hidden.has(r.name) && (!depts.length || depts.includes(r.department)));
+        if (cached.loading && cached.names?.length) {
+            // Noch nicht geladene Personen der gewählten Abteilungen als Platzhalter zeigen
+            const have = new Set(rows.map(r => r.name));
+            for (const name of cached.names) {
+                if (!have.has(name))
+                    rows.push({name, department: depts[0] ?? '', status: 'loading', segments: [], absence: null, plannedHome: false, workedMinutes: 0});
+            }
+        }
+        rows = rows.filter(r => !hidden.has(r.name) && (!depts.length || r.status === 'loading' || depts.includes(r.department)));
         if (!this._settings.get_boolean('show-finished'))
             rows = rows.filter(r => r.status !== 'done');
         if (!this._settings.get_boolean('show-absent'))
@@ -412,9 +455,12 @@ class Indicator extends PanelMenu.Button {
 
         const present = rows.filter(r => r.status === 'work').length;
         const pause = rows.filter(r => r.status === 'pause').length;
-        this._statusLabel.text = this._lastError
-            ? `Fehler · Stand ${cached.wallClock.format('%H:%M')}`
-            : `${present} da · ${pause} Pause · ${cached.wallClock.format('%H:%M')}`;
+        if (cached.loading)
+            this._statusLabel.text = cached.total > 1 ? `Lade … ${cached.done}/${cached.total}` : 'Lade …';
+        else if (this._lastError)
+            this._statusLabel.text = `Fehler · Stand ${cached.wallClock.format('%H:%M')}`;
+        else
+            this._statusLabel.text = `${present} da · ${pause} Pause · ${cached.wallClock.format('%H:%M')}`;
     }
 
     _renderAxis(dayStart, dayEnd) {
@@ -483,6 +529,7 @@ class Indicator extends PanelMenu.Button {
         case 'work': case 'done': return formatDuration(row.workedMinutes);
         case 'pause': return 'Pause';
         case 'absent': return row.absence.replace('Freizeitausgleich', 'FZA').replace('Krankheit', 'Krank');
+        case 'loading': return '…';
         default: return row.plannedHome ? 'HO geplant' : '–';
         }
     }
@@ -495,7 +542,7 @@ class Indicator extends PanelMenu.Button {
 
     destroy() {
         this._stopTimer();
-        for (const key of ['_startupId', '_retryId']) {
+        for (const key of ['_startupId', '_retryId', '_renderId']) {
             if (this[key]) {
                 GLib.source_remove(this[key]);
                 this[key] = 0;
