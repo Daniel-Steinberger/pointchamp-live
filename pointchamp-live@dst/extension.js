@@ -8,9 +8,11 @@ import Cairo from 'cairo';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-import {PointChampClient, buildRows, sortRows, formatDuration, describeAbsence, addDays, namesForDepartments} from './api.js';
+import {PointChampClient, buildRows, sortRows, formatDuration, describeAbsence, addDays, namesForDepartments, tagColor} from './api.js';
+import {PointChampWeb, REQUEST_KINDS} from './web.js';
 
 Gio._promisify(Gio.Subprocess.prototype, 'communicate_utf8_async', 'communicate_utf8_finish');
 
@@ -22,7 +24,7 @@ const PASSWORD_RETRY_SECONDS = 20;  // erneuter Versuch, wenn der Schlüsselbund
 const PASSWORD_RETRY_MAX = 6;
 const ROSTER_TTL_SECONDS = 6 * 3600;   // Stammdaten (wer ist in welcher Abteilung) so lange wiederverwenden
 const MAX_TARGETED_PEOPLE = 40;         // darüber ist der volle Abruf nicht langsamer als viele Einzelabfragen // Fenster, um anschließende Abwesenheiten zu erkennen
-const NAME_WIDTH = 150;
+const NAME_WIDTH = 210;
 const ICON_WIDTH = 16;
 const ROW_SPACING = 12;
 const COLORS = {
@@ -125,18 +127,46 @@ class Indicator extends PanelMenu.Button {
         this._lastError = null;
 
         this._icon = new St.Icon({gicon: this._ext.icon('pc-people'), style_class: 'system-status-icon'});
-        this.add_child(this._icon);
+        this._dot = new St.Widget({style_class: 'pointchamp-panel-dot', visible: false, y_align: Clutter.ActorAlign.START});
+        const box = new St.BoxLayout({style_class: 'pointchamp-panel-box'});
+        box.add_child(this._icon);
+        box.add_child(this._dot);
+        this.add_child(box);
+
+        this._web = null;
+        this._requests = [];          // offene Anträge (zuletzt abgerufen)
+        this._requestsError = null;
+        this._seenRequestIds = new Set();
+        this._requestsTimerId = 0;
+        this._notificationSource = null;
 
         this.menu.box.add_style_class_name('pointchamp-menu');
         this._buildStaticMenu();
 
         this.menu.connect('open-state-changed', (_m, open) => {
-            if (open)
+            if (open) {
                 this._refresh(false);
+                this._renderRequests();
+                if (this._settings.get_boolean('approvals-enabled'))
+                    this._refreshRequests();
+            }
         });
         this._settingsChangedId = this._settings.connect('changed', (_s, key) => {
-            if (['server-url', 'username'].includes(key))
+            if (['server-url', 'username'].includes(key)) {
                 this._client = null;
+                this._web = null;
+            }
+            if (key.startsWith('known-'))
+                return;
+            if (key === 'person-tags') {
+                this._render();
+                return;
+            }
+            if (key.startsWith('approvals-')) {
+                this._startRequestsTimer();
+                this._renderRequests();
+                return;
+            }
             this._cache.clear();
             this._render();
             this._refresh(true);
@@ -151,6 +181,166 @@ class Indicator extends PanelMenu.Button {
             return GLib.SOURCE_REMOVE;
         });
         this._startTimer();
+        this._startRequestsTimer();
+    }
+
+    // ------------------------------------------------------------ Anträge (Web-Oberfläche)
+    _startRequestsTimer() {
+        if (this._requestsTimerId) {
+            GLib.source_remove(this._requestsTimerId);
+            this._requestsTimerId = 0;
+        }
+        if (!this._settings.get_boolean('approvals-enabled')) {
+            this._requests = [];
+            this._requestsError = null;
+            this._updateDot();
+            return;
+        }
+        const interval = this._settings.get_int('approvals-interval');
+        this._requestsTimerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, interval, () => {
+            this._refreshRequests();
+            return GLib.SOURCE_CONTINUE;
+        });
+        // erste Abfrage kurz nach dem Start bzw. Einschalten
+        GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, STARTUP_DELAY_SECONDS + 5, () => {
+            this._refreshRequests();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    async _getWeb() {
+        if (this._web)
+            return this._web;
+        const server = this._settings.get_string('server-url');
+        const username = this._settings.get_string('username');
+        if (!server || !username)
+            throw new Error('Zugangsdaten fehlen.');
+        const password = await this._lookupPassword(server, username);
+        if (!password)
+            throw new Error(`Kein Passwort für ${username} im Schlüsselbund.`);
+        this._web = new PointChampWeb(server, username, password);
+        return this._web;
+    }
+
+    async _refreshRequests() {
+        if (!this._settings.get_boolean('approvals-enabled') || this._requestsLoading)
+            return;
+        this._requestsLoading = true;
+        try {
+            const web = await this._getWeb();
+            const {requests, errors} = await web.allOpenRequests(this._cancellable);
+            if (this._cancellable.is_cancelled())
+                return;
+            this._requestsError = errors.length ? errors.join(' · ') : null;
+            const fresh = requests.filter(r => !this._seenRequestIds.has(`${r.kind}:${r.id}`));
+            this._requests = requests;
+            for (const r of requests)
+                this._seenRequestIds.add(`${r.kind}:${r.id}`);
+            if (fresh.length && this._settings.get_boolean('approvals-notify'))
+                this._notifyRequests(fresh);
+        } catch (e) {
+            if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                return;
+            this._requestsError = e.message ?? String(e);
+            console.warn(`[pointchamp-live] Anträge: ${this._requestsError}`);
+        } finally {
+            this._requestsLoading = false;
+        }
+        this._updateDot();
+        this._renderRequests();
+    }
+
+    _updateDot() {
+        this._dot.visible = this._requests.length > 0;
+    }
+
+    _notifyRequests(fresh) {
+        if (!this._notificationSource) {
+            this._notificationSource = new MessageTray.Source({title: 'PointChamp Live', iconName: 'system-users-symbolic'});
+            this._notificationSource.connect('destroy', () => (this._notificationSource = null));
+            Main.messageTray.add(this._notificationSource);
+        }
+        const title = fresh.length === 1 ? 'Neuer Antrag zur Überprüfung' : `${fresh.length} neue Anträge zur Überprüfung`;
+        const body = fresh.slice(0, 4).map(r => `${r.name}: ${r.type} ${r.from}${r.to && r.to !== r.from ? ` – ${r.to}` : ''}`).join('\n');
+        const notification = new MessageTray.Notification({source: this._notificationSource, title, body});
+        notification.connect('activated', () => this.menu.open());
+        this._notificationSource.addNotification(notification);
+    }
+
+    _renderRequests() {
+        this._requestsSection.removeAll();
+        if (!this._settings.get_boolean('approvals-enabled'))
+            return;
+        const heading = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        const label = this._requestsError && !this._requests.length
+            ? `Anträge: ${this._requestsError}`
+            : `Anträge zur Überprüfung · ${this._requests.length}`;
+        heading.add_child(new St.Label({text: label, style_class: 'pointchamp-heading', x_expand: true}));
+        this._requestsSection.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this._requestsSection.addMenuItem(heading);
+        for (const req of this._requests)
+            this._requestsSection.addMenuItem(this._makeRequestRow(req));
+    }
+
+    _makeRequestRow(req) {
+        const item = new PopupMenu.PopupBaseMenuItem({style_class: 'pointchamp-request-row', can_focus: false, activate: false});
+        item.add_child(new St.Icon({gicon: this._ext.icon(req.kind === 'holiday' ? 'pc-case' : 'pc-out'), style_class: 'pointchamp-status-icon', y_align: Clutter.ActorAlign.CENTER}));
+        const text = new St.BoxLayout({vertical: true, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
+        text.add_child(new St.Label({text: req.name, style_class: 'pointchamp-request-text'}));
+        const range = req.to && req.to !== req.from ? `${req.from} – ${req.to}` : req.from;
+        const days = req.days ? ` · ${req.days} ${req.days === '1' ? 'Tag' : 'Tage'}` : '';
+        text.add_child(new St.Label({text: `${req.type} · ${range}${days}${req.department ? ` · ${req.department}` : ''}`, style_class: 'pointchamp-request-sub'}));
+        item.add_child(text);
+        item.add_child(this._actionButton('Genehmigen', 'accept', req));
+        item.add_child(this._actionButton('Ablehnen', 'decline', req));
+        return item;
+    }
+
+    /** Knopf mit zweistufiger Bestätigung: erster Klick fragt „Wirklich?", zweiter Klick führt aus. */
+    _actionButton(label, action, req) {
+        const btn = new St.Button({label, style_class: `pointchamp-request-button ${action}`, can_focus: true, y_align: Clutter.ActorAlign.CENTER});
+        let armed = 0;
+        btn.connect('clicked', () => {
+            if (!armed) {
+                btn.label = 'Wirklich?';
+                btn.add_style_class_name('confirm');
+                armed = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 5, () => {
+                    armed = 0;
+                    btn.label = label;
+                    btn.remove_style_class_name('confirm');
+                    return GLib.SOURCE_REMOVE;
+                });
+                return;
+            }
+            GLib.source_remove(armed);
+            armed = 0;
+            btn.label = '…';
+            btn.reactive = false;
+            this._performRequestAction(action, req).catch(e => {
+                console.warn(`[pointchamp-live] ${action} fehlgeschlagen: ${e.message}`);
+                btn.label = 'Fehler';
+                btn.reactive = true;
+            });
+        });
+        btn.connect('destroy', () => {
+            if (armed)
+                GLib.source_remove(armed);
+        });
+        return btn;
+    }
+
+    async _performRequestAction(action, req) {
+        const web = await this._getWeb();
+        const left = await web[action](req.kind, [req.id], this._cancellable);
+        if (left.length)
+            throw new Error(`PointChamp meldet den Antrag weiterhin als offen`);
+        this._requests = this._requests.filter(r => !(r.kind === req.kind && r.id === req.id));
+        this._updateDot();
+        this._renderRequests();
+        // Abwesenheiten neu laden, damit ein genehmigter Urlaub in der Tagesleiste erscheint
+        this._cache.clear();
+        this._refresh(true);
+        this._refreshRequests();
     }
 
     // ------------------------------------------------------------ Menü-Gerüst
@@ -177,6 +367,9 @@ class Indicator extends PanelMenu.Button {
 
         this._rowsSection = new PopupMenu.PopupMenuSection();
         this.menu.addMenuItem(this._rowsSection);
+
+        this._requestsSection = new PopupMenu.PopupMenuSection();
+        this.menu.addMenuItem(this._requestsSection);
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
@@ -350,6 +543,12 @@ class Indicator extends PanelMenu.Button {
             const depts = [...new Set(roster.map(p => p.department).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
             if (JSON.stringify(depts) !== JSON.stringify(this._settings.get_strv('known-departments')))
                 this._settings.set_strv('known-departments', depts);
+            const persons = roster
+                .filter(p => !p.leavingDate || p.leavingDate >= key)
+                .map(p => `${p.firstname} ${p.lastname}`.replace(/\s+/g, ' ').trim() + '\t' + (p.department ?? ''))
+                .sort((a, b) => a.localeCompare(b, 'de'));
+            if (JSON.stringify(persons) !== JSON.stringify(this._settings.get_strv('known-persons')))
+                this._settings.set_strv('known-persons', persons);
             this._cache.set(key, {tracking, absences, fetchedAt: nowSec, wallClock: GLib.DateTime.new_now_local()});
             this._lastError = null;
             this._icon.remove_style_class_name('pointchamp-indicator-error');
@@ -488,7 +687,7 @@ class Indicator extends PanelMenu.Button {
     _makeRow(row, dayStart, dayEnd, nowHours) {
         const item = new PopupMenu.PopupBaseMenuItem({style_class: 'pointchamp-row', can_focus: true});
         item.add_child(this._statusMarker(row));
-        item.add_child(new St.Label({text: row.name, style_class: 'pointchamp-row-name', y_align: Clutter.ActorAlign.CENTER}));
+        item.add_child(this._nameColumn(row));
         const timeline = new Timeline(row, dayStart, dayEnd, nowHours);
         if (row.status === 'absent') {
             // Beschriftung über der schraffierten Leiste
@@ -505,6 +704,30 @@ class Indicator extends PanelMenu.Button {
         item.add_child(new St.Label({text: this._rightText(row), style_class: 'pointchamp-row-right', y_align: Clutter.ActorAlign.CENTER}));
         item.connect('activate', () => this._openWeb());
         return item;
+    }
+
+    /** Name plus Tag-Badges aus den Einstellungen. */
+    _nameColumn(row) {
+        const box = new St.BoxLayout({style_class: 'pointchamp-row-name', y_align: Clutter.ActorAlign.CENTER});
+        const name = new St.Label({text: row.name, y_align: Clutter.ActorAlign.CENTER});
+        name.clutter_text.ellipsize = 3; // Pango.EllipsizeMode.END
+        box.add_child(name);
+        const tags = this._personTags()[row.name] ?? [];
+        for (const tag of tags) {
+            box.add_child(new St.Label({
+                text: tag, style_class: 'pointchamp-tag', y_align: Clutter.ActorAlign.CENTER,
+                style: `background-color: ${tagColor(tag)};`,
+            }));
+        }
+        return box;
+    }
+
+    _personTags() {
+        if (!this._tagsCache) {
+            this._tagsCache = this._settings.get_value('person-tags').deepUnpack();
+            this._tagsCacheId = this._settings.connect('changed::person-tags', () => (this._tagsCache = null));
+        }
+        return this._tagsCache;
     }
 
     _statusMarker(row) {
@@ -542,7 +765,7 @@ class Indicator extends PanelMenu.Button {
 
     destroy() {
         this._stopTimer();
-        for (const key of ['_startupId', '_retryId', '_renderId']) {
+        for (const key of ['_startupId', '_retryId', '_renderId', '_requestsTimerId']) {
             if (this[key]) {
                 GLib.source_remove(this[key]);
                 this[key] = 0;
@@ -551,6 +774,9 @@ class Indicator extends PanelMenu.Button {
         this._cancellable.cancel();
         if (this._settingsChangedId)
             this._settings.disconnect(this._settingsChangedId);
+        this._notificationSource?.destroy();
+        if (this._tagsCacheId)
+            this._settings.disconnect(this._tagsCacheId);
         super.destroy();
     }
 });

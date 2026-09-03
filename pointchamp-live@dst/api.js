@@ -217,7 +217,7 @@ export function buildRows(tracking, absences, date, nowHours) {
         else if (absence)
             status = 'absent';
 
-        const workedMinutes = Math.round(segments.filter(s => !s.pause).reduce((sum, s) => sum + (s.end - s.start) * 60, 0));
+        const workedMinutes = Math.max(0, Math.round(segments.filter(s => !s.pause).reduce((sum, s) => sum + (s.end - s.start) * 60, 0)));
 
         // Ende der zusammenhängenden Abwesenheit: direkt anschließende Einträge (z. B. Urlaub + Resturlaub) zusammenfassen
         let absenceUntil = null;
@@ -266,4 +266,13 @@ export const STATUS_ORDER = {work: 0, pause: 1, done: 2, none: 3, absent: 4, loa
 
 export function sortRows(rows) {
     return rows.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.name.localeCompare(b.name, 'de'));
+}
+
+/** Stabile Farbe je Tag (GNOME-Palette), damit gleiche Tags überall gleich aussehen. */
+export const TAG_COLORS = ['#3584e4', '#9141ac', '#2ec27e', '#e66100', '#c061cb', '#1c71d8', '#813d9c', '#e5a50a', '#986a44', '#33d17a'];
+export function tagColor(tag) {
+    let h = 0;
+    for (const ch of tag)
+        h = (h * 31 + ch.codePointAt(0)) >>> 0;
+    return TAG_COLORS[h % TAG_COLORS.length];
 }
