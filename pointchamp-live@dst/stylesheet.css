@@ -30,7 +30,7 @@
 
 /* Anträge */
 .pointchamp-panel-box { }
-.pointchamp-panel-dot { width: 8px; height: 8px; border-radius: 999px; background-color: #f66151; margin: 3px 0 0 -6px; }
+.pointchamp-panel-dot { width: 8px; height: 8px; border-radius: 999px; background-color: #f66151; margin: 3px 4px 0 0; } /* keine negativen Ränder in St! */
 .pointchamp-request-row { spacing: 12px; padding: 7px 12px; }
 .pointchamp-request-text { }
 .pointchamp-request-sub { color: rgba(255,255,255,0.55); font-size: 0.85em; }
