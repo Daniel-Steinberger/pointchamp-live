@@ -1,15 +1,28 @@
-# PointChamp Live – GNOME-Shell-Erweiterung (Prototyp)
+# PointChamp Live – GNOME-Shell-Erweiterung
 
 Zeigt im Panel ein Personen-Symbol. Ein Klick öffnet die Tagesleiste (Design „Option C"):
 je Person eine Zeitachse mit Arbeits- und Pausensegmenten aus der PointChamp-API,
-offenes Segment läuft bis „jetzt", Abwesende schraffiert, geplantes Homeoffice mit Haus-Symbol.
-Pfeile im Kopf blättern durch vergangene Tage, Klick aufs Datum springt zurück auf heute.
+offenes Segment läuft bis „jetzt", Abwesende schraffiert mit Ende, Resttagen und Rückkehrtag,
+geplantes Homeoffice mit Haus-Symbol. Pfeile im Kopf blättern durch vergangene Tage.
+
+Funktionen (Stand 2026-09-10, alles auf `main`):
+
+- **Live-Status** je Person: arbeitet, Pause, heute fertig, noch nicht da, abwesend
+- **Abteilungsfilter** und **Tags** je Person (z. B. Bestand, medVS, StBVS) als farbige Badges
+- **Schnelles, fortlaufendes Laden**: nur die Personen der gewählten Abteilungen, jede
+  Antwort erscheint sofort (erste Zeile nach ~2 s, alle nach ~4 s statt 10 s)
+- **Anträge zur Überprüfung** (Urlaub, Freizeitausgleich …) mit Genehmigen/Ablehnen direkt im
+  Menü, rotem Punkt am Panel-Symbol und GNOME-Benachrichtigung; opt-in, läuft über die
+  Web-Oberfläche mit dem eigenen Konto. Erste echte Freigabe am 2026-09-10 erfolgreich.
 
 Verzeichnisse:
 
-- `pointchamp-live@dst/` – die Erweiterung (ESM, GNOME Shell 50, Soup 3, libsecret, libadwaita)
-- `design/` – Designvorschläge als Design-Canvas (`build_artboards.py` erzeugt die Artboards)
-- `RECHERCHE.md` – API-Recherche (Endpunkte, Feldsemantik, Grenzen)
+- `pointchamp-live@dst/` – die Erweiterung (ESM, GNOME Shell 50, Soup 3, libadwaita)
+- `design/` – Designvorschläge als Design-Canvas (`build_artboards.py` erzeugt die Artboards),
+  `design/screenshots/` – Bilder aus der headless Shell mit fiktiven Namen
+- `docs/api-recherche.md` – API-Recherche (Endpunkte, Feldsemantik, Grenzen)
+- `docs/2026-09-10-panel-unsichtbar.md` – Analyse des Panel-Bugs durch negativen Rand
+- `CLAUDE.md` – Projektregeln für die Arbeit mit Claude Code
 
 ## Installation
 
@@ -61,7 +74,17 @@ der `changed`-Handler leert den Cache.
 
 Alternativ: `dbus-run-session -- gnome-shell --nested --wayland` öffnet die Shell in einem Fenster.
 
-## Anträge zur Überprüfung (Feature-Branch `feature/antraege`)
+## Gelernte Regeln für St/Clutter
+
+- **Kein libsecret im Shell-Prozess** (Absturz beim Login, siehe oben).
+- **Keine negativen Ränder in St-CSS**: `margin: … -6px` ließ die bevorzugte Breite auf 2^32
+  überlaufen, das gesamte Panel wurde per Culling nicht mehr gezeichnet
+  (`docs/2026-09-10-panel-unsichtbar.md`). Überlagerungen mit `Clutter.BinLayout` + `x_align`/`y_align`.
+- **Symbolische Icons müssen Flächen sein**: das Recoloring füllt alle Pfade; Strich-SVGs per
+  Inkscape `object-stroke-to-path` wandeln.
+- Bei Merge-Konflikten im Settings-Handler: `known-*`-Schlüssel dürfen kein Neuladen auslösen.
+
+## Anträge zur Überprüfung
 
 Die externe API kennt keine Anträge. Die Erweiterung meldet sich deshalb optional mit dem eigenen
 Konto in der Web-Oberfläche an (`web.js`, Session-Cookie, Re-Login nach 15 min Inaktivität) und liest
@@ -76,13 +99,27 @@ noch offenen IDs). Im Menü hat jede Antragszeile zwei Knöpfe mit zweistufiger 
 („Wirklich?" innerhalb von 5 s). Offene Anträge zeigen einen roten Punkt am Panel-Symbol und
 optional eine GNOME-Benachrichtigung. Einschalten unter Einstellungen → Anträge.
 
-Der Zeilen-Parser wurde gegen eine nachgebaute offene Zeile geprüft, weil beim Bau kein echter
-Antrag offen war; der erste echte Antrag sollte im Menü kontrolliert werden.
+Der Zeilen-Parser wurde zunächst gegen eine nachgebaute Zeile geprüft. Am 2026-09-10 wurde der
+erste echte Urlaubsantrag über das Menü genehmigt; PointChamp führt ihn seitdem als „Antrag
+akzeptiert" mit dem Zeitstempel der Freigabe, der Antrag verschwand aus der Warteschlange und
+der Urlaub erschien in der Abwesenheitsliste der API.
 
-## Bekannte Grenzen des Prototyps
+## Tags je Person
+
+Unter Einstellungen → Personen → Tags bekommt jede Person der eingeschalteten Abteilungen ein
+Eingabefeld für kommagetrennte Tags. Gespeichert wird in `person-tags` (GSettings `a{sas}`,
+Name → Liste). Im Menü erscheinen sie als Badges hinter dem Namen; die Farbe wird stabil aus dem
+Tag-Namen abgeleitet (GNOME-Palette in `api.js`). Die Personenliste kommt aus den Stammdaten
+(`known-persons`, bei jedem Abruf aktualisiert).
+
+## Bekannte Grenzen
 
 - Die tatsächliche Stempel-Kategorie (Homeoffice/Office/Unterwegs) liefert die externe API nicht;
   gezeigt wird nur geplantes Homeoffice aus den Abwesenheiten (`Homeoffice*`). Nicht jeder
   Homeoffice-Eintrag der Web-Live-Ansicht taucht dort auf.
-- Abteilungen sind erst nach dem ersten erfolgreichen Abruf bekannt.
-- Keine Benachrichtigungen, kein Zähler im Panel (bewusst nur das Symbol).
+- Abteilungen und Personen (für Tags) sind erst nach dem ersten erfolgreichen Abruf bekannt.
+- Kein Zähler im Panel (bewusst nur das Symbol, plus roter Punkt bei offenen Anträgen).
+- Der Rückkehrtag nach einer Abwesenheit ist der nächste Werktag Mo–Fr; Feiertage werden nicht
+  berücksichtigt. Resttage zählen Kalendertage.
+- Geänderter Erweiterungscode wird von der Shell erst nach Ab- und Anmelden geladen; ein
+  Aus-/Einschalten lädt nur das Stylesheet neu.

@@ -80,6 +80,15 @@ Freistellung, **Homeoffice\*** (geplanter Homeoffice-Tag wird als Abwesenheit ge
   **nicht** in der externen API. Was „Start" genau bedeutet (Office oder „keine Kategorie") ist noch offen.
 - Die Web-App nutzt Mercure (Cookie `mercureAuthorization`) für Push – für uns nicht nötig.
 
+## Nachtrag 2026-09-10: Anträge über die Web-Oberfläche
+
+Für Anträge zur Überprüfung gibt es keine API. Die Web-Oberfläche liefert sie unter
+`/de/administration/holiday/` (Urlaub) und `/de/administration/illness/open` (sonstige
+Ab-/Anwesenheiten); Genehmigen/Ablehnen läuft über `POST …/holiday/batch/acceppt|decline`
+mit `holidaysIDS[]` bzw. `…/absence/batch/acceppt|decline` mit `absenceIDS[]`, Antwort JSON mit
+den noch offenen IDs. Login per Formular mit CSRF-Token, Sitzung endet nach 15 min Inaktivität.
+Implementiert in `web.js`, erste echte Freigabe am 2026-09-10 erfolgreich.
+
 ## Bewertung
 
 | Wunsch | Externe API | Web-Scraping |

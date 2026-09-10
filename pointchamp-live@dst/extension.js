@@ -130,7 +130,7 @@ class Indicator extends PanelMenu.Button {
         // Icon und Punkt in derselben BinLayout-Zelle: der Punkt sitzt oben rechts über dem Icon,
         // ohne eigene Breite zu belegen. Kein negativer Rand: St rechnet Ränder in die bevorzugte
         // Breite ein, ein negativer Wert ließ sie auf 2^32 überlaufen und das ganze Panel wurde
-        // per Culling nicht mehr gezeichnet (siehe BUG-PANEL-UNSICHTBAR.md).
+        // per Culling nicht mehr gezeichnet (siehe docs/2026-09-10-panel-unsichtbar.md).
         this._dot = new St.Widget({
             style_class: 'pointchamp-panel-dot', visible: false,
             x_align: Clutter.ActorAlign.END, y_align: Clutter.ActorAlign.START,
