@@ -200,6 +200,7 @@ export function buildRows(tracking, absences, date, nowHours) {
                     continue; // Pausenkorrektur nach Tagesende
                 const open = seg.minutes === null || seg.minutes === undefined;
                 segments.push({
+                    id: seg.id,
                     start: parseHms(seg.start),
                     end: open ? nowHours : parseHms(seg.end),
                     pause: !!seg.break,

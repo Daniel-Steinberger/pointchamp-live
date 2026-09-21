@@ -40,6 +40,18 @@ export default class PointChampLivePrefs extends ExtensionPreferences {
             .then(p => { if (p) pw.text = p; })
             .catch(e => console.warn(`[pointchamp-live] Schlüsselbund: ${e.message}`));
 
+        const capsRow = new Adw.ActionRow({title: 'Berechtigungen des Kontos'});
+        const capsText = () => {
+            const c = settings.get_strv('web-capabilities');
+            if (!c.length)
+                return 'Noch nicht ermittelt (nach dem ersten Abruf der Erweiterung)';
+            return `Zeiterfassung (Kategorien): ${c.includes('time-tracking') ? 'ja' : 'nein'} · Anträge: ${c.includes('approvals') ? 'ja' : 'nein'}`;
+        };
+        capsRow.subtitle = capsText();
+        const capsId = settings.connect('changed::web-capabilities', () => (capsRow.subtitle = capsText()));
+        page.connect('destroy', () => settings.disconnect(capsId));
+        group.add(capsRow);
+
         const status = new Adw.ActionRow({title: 'Verbindung', subtitle: 'Noch nicht geprüft'});
         const testBtn = new Gtk.Button({label: 'Speichern & prüfen', valign: Gtk.Align.CENTER, css_classes: ['suggested-action']});
         status.add_suffix(testBtn);
@@ -237,6 +249,15 @@ export default class PointChampLivePrefs extends ExtensionPreferences {
             settings.bind(key, row, 'value', Gio.SettingsBindFlags.DEFAULT);
             axis.add(row);
         }
+
+        const cats = new Adw.PreferencesGroup({title: 'Zeitkategorien'});
+        page.add(cats);
+        const catRow = new Adw.SwitchRow({
+            title: 'Homeoffice / Office / Unterwegs je Segment',
+            subtitle: 'Aus der Admin-Zeiterfassung; braucht ein Konto mit Zugriff darauf, sonst ohne Wirkung',
+        });
+        settings.bind('categories-enabled', catRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+        cats.add(catRow);
 
         const show = new Adw.PreferencesGroup({title: 'Zeilen'});
         page.add(show);

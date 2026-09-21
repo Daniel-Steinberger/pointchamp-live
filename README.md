@@ -49,6 +49,11 @@ im Abstand von 20 s erneut versucht.
 
 ## Testen ohne Ab- und Anmelden
 
+Fertiges Skript: `dbus-run-session -- tools/headless/run.sh /tmp/pc-test` startet die headless Shell,
+lädt fiktive Daten aus `tools/headless/inject.js` (Tagesdaten, Tags, Anträge, Zeitkategorien) und
+schreibt `menu.png`, `prefs.png` und `shell.log` ins Ausgabeverzeichnis. Von Hand geht es so:
+
+
 Headless-Shell mit eigener D-Bus-Sitzung und isolierten GSettings (keyfile-Backend), damit die
 laufende Sitzung unberührt bleibt:
 
@@ -104,6 +109,27 @@ erste echte Urlaubsantrag über das Menü genehmigt; PointChamp führt ihn seitd
 akzeptiert" mit dem Zeitstempel der Freigabe, der Antrag verschwand aus der Warteschlange und
 der Urlaub erschien in der Abwesenheitsliste der API.
 
+## Zeitkategorien (Homeoffice / Office / Unterwegs)
+
+Die externe API kennt keine Kategorie je Segment. Die Admin-Zeiterfassung zeigt sie aber in der
+Tages-Detailansicht `/de/administration/time/tracking/detail/<user>/<datum>`, und die Zeilen-IDs
+dort (`id-138200`) sind die Segment-IDs der API. `web.js` liest daraus `segmentCategories()`;
+die Nutzer-IDs kommen aus der Übersichtsseite (`trackingUserIds()`).
+
+Ablauf in der Erweiterung: nach jedem Tracking-Abruf werden nur Personen mit noch unbekannten
+Segment-IDs nachgeladen (die Detailseiten sind ~2,5 MB, höchstens 3 parallel), Ergebnisse
+landen in einem Cache je Segment-ID. Segmente werden dann gefärbt: Arbeit ohne Kategorie/Office
+grün, Homeoffice blau, Unterwegs lila, Pause orange; das Statussymbol vorne zeigt die aktuelle
+Kategorie (Haus bzw. Pfeil). Legendeneinträge erscheinen nur, wenn Kategorien vorliegen.
+
+### Konto-Klassifikation
+
+`web.capabilities()` prüft einmal je Web-Sitzung per GET, ob das Konto die Admin-Zeiterfassung
+(`/de/administration/time/tracking/`) und die Anträge (`/de/administration/holiday/`) sehen darf
+(200 = ja, 403 = nein). Das Ergebnis steht in GSettings `web-capabilities` und unter
+Einstellungen → Konto → „Berechtigungen des Kontos". Ohne Zeiterfassungs-Recht läuft alles wie
+zuvor ohne Kategorien, ohne Antrags-Recht wird der Antrags-Abschnitt mit Hinweis übersprungen.
+
 ## Tags je Person
 
 Unter Einstellungen → Personen → Tags bekommt jede Person der eingeschalteten Abteilungen ein
@@ -114,9 +140,9 @@ Tag-Namen abgeleitet (GNOME-Palette in `api.js`). Die Personenliste kommt aus de
 
 ## Bekannte Grenzen
 
-- Die tatsächliche Stempel-Kategorie (Homeoffice/Office/Unterwegs) liefert die externe API nicht;
-  gezeigt wird nur geplantes Homeoffice aus den Abwesenheiten (`Homeoffice*`). Nicht jeder
-  Homeoffice-Eintrag der Web-Live-Ansicht taucht dort auf.
+- Die Stempel-Kategorie (Homeoffice/Office/Unterwegs) liefert die externe API nicht. Sie kommt
+  aus der Admin-Zeiterfassung (siehe „Zeitkategorien") und setzt ein Konto mit Zugriff darauf
+  voraus; ohne diesen Zugriff bleibt es beim geplanten Homeoffice aus den Abwesenheiten.
 - Abteilungen und Personen (für Tags) sind erst nach dem ersten erfolgreichen Abruf bekannt.
 - Kein Zähler im Panel (bewusst nur das Symbol, plus roter Punkt bei offenen Anträgen).
 - Der Rückkehrtag nach einer Abwesenheit ist der nächste Werktag Mo–Fr; Feiertage werden nicht

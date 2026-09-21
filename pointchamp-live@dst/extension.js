@@ -22,13 +22,16 @@ const ABSENCE_LOOKAHEAD_DAYS = 60;
 const STARTUP_DELAY_SECONDS = 10;   // Schlüsselbund und Netz nach dem Login erst ankommen lassen
 const PASSWORD_RETRY_SECONDS = 20;  // erneuter Versuch, wenn der Schlüsselbund noch nicht bereit war
 const PASSWORD_RETRY_MAX = 6;
-const ROSTER_TTL_SECONDS = 6 * 3600;   // Stammdaten (wer ist in welcher Abteilung) so lange wiederverwenden
+const ROSTER_TTL_SECONDS = 6 * 3600;
+const CATEGORY_PARALLEL = 3;             // Detailseiten sind ~2,5 MB, nicht alle auf einmal   // Stammdaten (wer ist in welcher Abteilung) so lange wiederverwenden
 const MAX_TARGETED_PEOPLE = 40;         // darüber ist der volle Abruf nicht langsamer als viele Einzelabfragen // Fenster, um anschließende Abwesenheiten zu erkennen
 const NAME_WIDTH = 210;
 const ICON_WIDTH = 16;
 const ROW_SPACING = 12;
 const COLORS = {
-    work: [0.341, 0.890, 0.537, 1],        // #57e389
+    work: [0.341, 0.890, 0.537, 1],        // #57e389 Arbeit ohne Kategorie / Office
+    home: [0.384, 0.627, 0.918, 1],        // #62a0ea Homeoffice
+    travel: [0.863, 0.541, 0.867, 1],      // #dc8add Unterwegs
     pause: [1.0, 0.639, 0.282, 1],         // #ffa348
     doneWork: [1, 1, 1, 0.35],
     donePause: [1, 1, 1, 0.18],
@@ -88,8 +91,14 @@ class Timeline extends St.DrawingArea {
             const x0 = this._x(seg.start), x1 = this._x(seg.end);
             const width = Math.max(x1 - x0, 2);
             let color = seg.pause ? COLORS.pause : COLORS.work;
-            if (done)
-                color = seg.pause ? COLORS.donePause : COLORS.doneWork;
+            if (!seg.pause && seg.category === 'Homeoffice')
+                color = COLORS.home;
+            else if (!seg.pause && seg.category === 'Unterwegs')
+                color = COLORS.travel;
+            if (done) {
+                // beendete Tage gedimmt, Kategorie bleibt erkennbar
+                color = seg.pause ? COLORS.donePause : (seg.category ? [color[0], color[1], color[2], 0.45] : COLORS.doneWork);
+            }
             if (seg.open) {
                 const grad = new Cairo.LinearGradient(x0, 0, x0 + width, 0);
                 grad.addColorStopRGBA(0, ...color);
@@ -141,6 +150,10 @@ class Indicator extends PanelMenu.Button {
         this.add_child(box);
 
         this._web = null;
+        this._webCaps = null;          // {timeTracking, approvals} nach Klassifikation des Kontos
+        this._catCache = new Map();    // Segment-ID → Kategorie
+        this._catPending = new Set();  // Personen, für die gerade Kategorien geladen werden
+        this._uidCache = null;         // {date, map: Name → User-ID}
         this._requests = [];          // offene Anträge (zuletzt abgerufen)
         this._requestsError = null;
         this._seenRequestIds = new Set();
@@ -162,7 +175,19 @@ class Indicator extends PanelMenu.Button {
             if (['server-url', 'username'].includes(key)) {
                 this._client = null;
                 this._web = null;
+                this._webCaps = null;
+                this._catCache.clear();
+                this._uidCache = null;
             }
+            if (key === 'categories-enabled') {
+                const cached = this._cache.get(this._dateKey());
+                if (cached && !cached.loading)
+                    this._enrichCategories(this._dateKey(), cached.tracking).catch(() => {});
+                this._render();
+                return;
+            }
+            if (key === 'web-capabilities')
+                return;
             if (key.startsWith('known-'))
                 return;
             if (key === 'person-tags') {
@@ -229,12 +254,86 @@ class Indicator extends PanelMenu.Button {
         return this._web;
     }
 
+    /** Konto klassifizieren (einmal je Web-Sitzung) und Ergebnis für die Einstellungen spiegeln. */
+    async _getWebCaps() {
+        if (this._webCaps)
+            return this._webCaps;
+        const web = await this._getWeb();
+        this._webCaps = await web.capabilities(this._cancellable);
+        const list = Object.entries({'time-tracking': this._webCaps.timeTracking, approvals: this._webCaps.approvals})
+            .filter(([, ok]) => ok).map(([k]) => k);
+        if (JSON.stringify(list) !== JSON.stringify(this._settings.get_strv('web-capabilities')))
+            this._settings.set_strv('web-capabilities', list);
+        return this._webCaps;
+    }
+
+    /**
+     * Zeitkategorien (Homeoffice/Office/Unterwegs) je Segment aus der Admin-Zeiterfassung nachladen.
+     * Läuft nur, wenn das Konto die Zeiterfassung sehen darf; sonst bleibt alles wie bisher.
+     * Geladen wird nur für Personen mit unbekannten Segment-IDs, im Normalbetrieb also selten.
+     */
+    async _enrichCategories(date, tracking) {
+        if (!this._settings.get_boolean('categories-enabled'))
+            return;
+        if (!this._settings.get_string('username'))
+            return;
+        let caps;
+        try {
+            caps = await this._getWebCaps();
+        } catch (e) {
+            console.warn(`[pointchamp-live] Konto-Klassifikation: ${e.message}`);
+            return;
+        }
+        if (!caps.timeTracking)
+            return;
+        const web = await this._getWeb();
+        const todo = [];
+        for (const p of tracking) {
+            const day = Array.isArray(p.days) ? null : p.days?.[date];
+            if (!day?.detail)
+                continue;
+            const segs = Array.isArray(day.detail[0]) ? day.detail.flat() : day.detail;
+            const name = p.name.replace(/\s+/g, ' ').trim();
+            if (segs.some(sg => !sg.break && !this._catCache.has(sg.id)) && !this._catPending.has(name))
+                todo.push(name);
+        }
+        if (!todo.length)
+            return;
+        if (!this._uidCache || this._uidCache.date !== date || todo.some(n => !this._uidCache.map.has(n)))
+            this._uidCache = {date, map: await web.trackingUserIds(date, this._cancellable)};
+        const queue = todo.filter(n => this._uidCache.map.has(n));
+        for (const n of queue)
+            this._catPending.add(n);
+        const worker = async () => {
+            while (queue.length) {
+                const name = queue.shift();
+                try {
+                    const cats = await web.segmentCategories(this._uidCache.map.get(name), date, this._cancellable);
+                    for (const [id, cat] of cats)
+                        this._catCache.set(id, cat);
+                    this._scheduleRender();
+                } catch (e) {
+                    console.warn(`[pointchamp-live] Kategorien für ${name}: ${e.message}`);
+                } finally {
+                    this._catPending.delete(name);
+                }
+            }
+        };
+        await Promise.all(Array.from({length: CATEGORY_PARALLEL}, worker));
+    }
+
     async _refreshRequests() {
         if (!this._settings.get_boolean('approvals-enabled') || this._requestsLoading)
             return;
         this._requestsLoading = true;
         try {
             const web = await this._getWeb();
+            const caps = await this._getWebCaps();
+            if (!caps.approvals) {
+                this._requestsError = 'Konto ohne Berechtigung für Anträge';
+                this._requests = [];
+                return;
+            }
             const {requests, errors} = await web.allOpenRequests(this._cancellable);
             if (this._cancellable.is_cancelled())
                 return;
@@ -383,6 +482,10 @@ class Indicator extends PanelMenu.Button {
         const legendItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         const legend = new St.BoxLayout({style_class: 'pointchamp-legend', x_expand: true});
         legend.add_child(this._legendEntry('Arbeit', 'pointchamp-dot-work'));
+        this._legendHome = this._legendEntry('Homeoffice', 'pointchamp-dot-home');
+        this._legendTravel = this._legendEntry('Unterwegs', 'pointchamp-dot-travel');
+        legend.add_child(this._legendHome);
+        legend.add_child(this._legendTravel);
         legend.add_child(this._legendEntry('Pause', 'pointchamp-dot-pause'));
         legend.add_child(this._legendEntry('beendet', 'pointchamp-dot-done'));
         this._nowLabel = new St.Label({text: 'jetzt', y_align: Clutter.ActorAlign.CENTER});
@@ -558,6 +661,7 @@ class Indicator extends PanelMenu.Button {
                 this._settings.set_strv('known-persons', persons);
             this._cache.set(key, {tracking, absences, fetchedAt: nowSec, wallClock: GLib.DateTime.new_now_local()});
             this._lastError = null;
+            this._enrichCategories(key, tracking).catch(e => console.warn(`[pointchamp-live] Kategorien: ${e.message}`));
             this._icon.remove_style_class_name('pointchamp-indicator-error');
         } catch (e) {
             if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
@@ -625,6 +729,9 @@ class Indicator extends PanelMenu.Button {
         this._nowLabel.text = `jetzt ${now.format('%H:%M')}`;
         this._nowLabel.get_parent().visible = this._isToday();
 
+        const catsAvailable = this._catCache.size > 0;
+        this._legendHome.visible = catsAvailable;
+        this._legendTravel.visible = catsAvailable;
         this._renderAxis(dayStart, dayEnd);
         this._rowsSection.removeAll();
 
@@ -637,6 +744,12 @@ class Indicator extends PanelMenu.Button {
 
         const hidden = new Set(this._settings.get_strv('hidden-names'));
         let rows = buildRows(cached.tracking, cached.absences, this._dateKey(), this._isToday() ? nowHours : dayEnd);
+        for (const r of rows) {
+            for (const sg of r.segments)
+                sg.category = this._catCache.get(sg.id) ?? null;
+            const open = r.segments.find(sg => sg.open);
+            r.currentCategory = open && !open.pause ? open.category : null;
+        }
         if (cached.loading && cached.names?.length) {
             // Noch nicht geladene Personen der gewählten Abteilungen als Platzhalter zeigen
             const have = new Set(rows.map(r => r.name));
@@ -739,15 +852,22 @@ class Indicator extends PanelMenu.Button {
 
     _statusMarker(row) {
         let iconName = null;
+        let extraClass = null;
         if (row.status === 'pause')
             iconName = 'pc-coffee';
-        else if (row.plannedHome)
+        else if (row.status === 'work' && row.currentCategory === 'Homeoffice') {
+            iconName = 'pc-house';
+            extraClass = 'home';
+        } else if (row.status === 'work' && row.currentCategory === 'Unterwegs') {
+            iconName = 'pc-out';
+            extraClass = 'travel';
+        } else if (row.plannedHome)
             iconName = 'pc-house';
         else if (row.status === 'absent')
             iconName = /krank/i.test(row.absence ?? '') ? 'pc-plus' : 'pc-case';
         if (iconName) {
             const icon = new St.Icon({gicon: this._ext.icon(iconName), style_class: 'pointchamp-status-icon', y_align: Clutter.ActorAlign.CENTER});
-            icon.add_style_class_name(row.status);
+            icon.add_style_class_name(extraClass ?? row.status);
             return icon;
         }
         const dotClass = {work: 'pointchamp-dot-work', done: 'pointchamp-dot-done'}[row.status] ?? 'pointchamp-dot-done';
