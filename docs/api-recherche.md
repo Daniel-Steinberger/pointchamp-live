@@ -89,6 +89,17 @@ mit `holidaysIDS[]` bzw. `…/absence/batch/acceppt|decline` mit `absenceIDS[]`,
 den noch offenen IDs. Login per Formular mit CSRF-Token, Sitzung endet nach 15 min Inaktivität.
 Implementiert in `web.js`, erste echte Freigabe am 2026-09-10 erfolgreich.
 
+## Nachtrag 2026-09-21: Stempel-Kategorie je Segment
+
+Die Kategorie (Homeoffice / Office / Unterwegs / keine) steht weder in `tracking/days` noch im
+CSV-Export; die Web-Live-Ansicht zeigt sie nur für das laufende Segment. Vollständig je Segment
+liefert sie die Admin-Detailansicht `/de/administration/time/tracking/detail/<user>/<datum>`
+(Tabelle mit Spalte „Zeitkategorie"). Die Zeilen-IDs `id-<n>` sind die Segment-IDs der API,
+die Zuordnung ist damit eindeutig. Die User-IDs stehen in den Detail-Links der Übersichtsseite
+`/de/administration/time/tracking/?date=…&department=0`. Beide Seiten liefern ohne Berechtigung
+HTTP 403 (mit dem Service-Konto verifiziert), was die Erweiterung zur Klassifikation des Kontos nutzt.
+Kosten: ~2,5 MB je Detailseite, daher nur bei neuen Segment-IDs nachladen.
+
 ## Bewertung
 
 | Wunsch | Externe API | Web-Scraping |
@@ -97,14 +108,12 @@ Implementiert in `web.js`, erste echte Freigabe am 2026-09-10 erfolgreich.
 | Wer war heute da / ist in Pause / kommt vermutlich wieder | ✅ Segment-Historie | ⚠️ nur Pause-Status, keine Historie |
 | Filter nach Abteilung | ✅ `department`-Feld | ✅ `department=<id>` |
 | Urlaub / Krankheit / Abwesenheit | ✅ `absence` | ✅ (nur heutiger Tag) |
-| Homeoffice vs. vor Ort | ⚠️ nur **geplant** (Abwesenheitsart `Homeoffice*`) | ✅ tatsächliche Stempel-Kategorie |
+| Homeoffice vs. vor Ort | ⚠️ nur **geplant** (Abwesenheitsart `Homeoffice*`) | ✅ je Segment in der Admin-Detailansicht (Nachtrag 2026-09-21) |
 | Historie vergangener Tage | ✅ `start`/`end` | ❌ |
 | Stabilität | ✅ dokumentierte JSON-API | ⚠️ HTML-Struktur, Session-Login |
 
-Empfehlung: **Externe API als Grundlage** (alles außer der tatsächlichen Stempel-Kategorie),
-die geplanten Homeoffice-Tage aus `absence` beimischen. Die Web-Live-Ansicht nur optional
-als zweite Quelle für die Kategorie Homeoffice/Office/Unterwegs, oder PointChamp
-bitten, die Kategorie in `tracking/days.detail` aufzunehmen.
-
-Offene Frage: eigenes PointChamp-Konto des Nutzers statt des geteilten Service-Kontos verwenden?
-Zugangsdaten gehören in der Erweiterung in den GNOME-Schlüsselbund (libsecret), nicht in GSettings.
+Umgesetzt (Stand 2026-09-21): **Externe API als Grundlage**, geplantes Homeoffice aus `absence`,
+Stempel-Kategorien je Segment und Anträge aus der Web-Oberfläche mit dem persönlichen Konto des
+Nutzers. Das Passwort liegt im GNOME-Schlüsselbund und wird über einen Helfer-Prozess gelesen.
+Eine API-Erweiterung um die Kategorie in `tracking/days.detail` würde die Web-Abhängigkeit
+für diesen Teil überflüssig machen.

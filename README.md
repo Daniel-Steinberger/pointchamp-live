@@ -3,9 +3,10 @@
 Zeigt im Panel ein Personen-Symbol. Ein Klick öffnet die Tagesleiste (Design „Option C"):
 je Person eine Zeitachse mit Arbeits- und Pausensegmenten aus der PointChamp-API,
 offenes Segment läuft bis „jetzt", Abwesende schraffiert mit Ende, Resttagen und Rückkehrtag,
-geplantes Homeoffice mit Haus-Symbol. Pfeile im Kopf blättern durch vergangene Tage.
+Segmente nach Stempel-Kategorie gefärbt (Homeoffice blau, Unterwegs lila), geplantes Homeoffice
+mit Haus-Symbol. Pfeile im Kopf blättern durch vergangene Tage.
 
-Funktionen (Stand 2026-09-10, alles auf `main`):
+Funktionen (Stand 2026-09-21, alles auf `main`):
 
 - **Live-Status** je Person: arbeitet, Pause, heute fertig, noch nicht da, abwesend
 - **Abteilungsfilter** und **Tags** je Person (z. B. Bestand, medVS, StBVS) als farbige Badges
@@ -14,6 +15,10 @@ Funktionen (Stand 2026-09-10, alles auf `main`):
 - **Anträge zur Überprüfung** (Urlaub, Freizeitausgleich …) mit Genehmigen/Ablehnen direkt im
   Menü, rotem Punkt am Panel-Symbol und GNOME-Benachrichtigung; opt-in, läuft über die
   Web-Oberfläche mit dem eigenen Konto. Erste echte Freigabe am 2026-09-10 erfolgreich.
+- **Zeitkategorien je Segment** (Homeoffice / Office / Unterwegs) aus der Admin-Zeiterfassung,
+  seit 2026-09-21 mit echten Daten bestätigt. Setzt ein Konto mit Zugriff darauf voraus.
+- **Konto-Klassifikation**: die Erweiterung prüft, welche Admin-Bereiche das Konto sehen darf,
+  und lässt Anträge und Kategorien ohne Berechtigung still weg. Die Tagesleiste läuft immer.
 
 Verzeichnisse:
 
@@ -22,6 +27,7 @@ Verzeichnisse:
   `design/screenshots/` – Bilder aus der headless Shell mit fiktiven Namen
 - `docs/api-recherche.md` – API-Recherche (Endpunkte, Feldsemantik, Grenzen)
 - `docs/2026-09-10-panel-unsichtbar.md` – Analyse des Panel-Bugs durch negativen Rand
+- `tools/headless/` – Testskripte für die headless Shell (Beispieldaten, Screenshots)
 - `CLAUDE.md` – Projektregeln für die Arbeit mit Claude Code
 
 ## Installation
