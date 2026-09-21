@@ -69,5 +69,13 @@
       <default>[]</default>
       <summary>Zuletzt bekannte Personen als „Name\tAbteilung" (für die Tag-Zuordnung in den Einstellungen)</summary>
     </key>
+    <key name="categories-enabled" type="b">
+      <default>true</default>
+      <summary>Zeitkategorien (Homeoffice/Office/Unterwegs) je Segment aus der Admin-Zeiterfassung laden</summary>
+    </key>
+    <key name="web-capabilities" type="as">
+      <default>[]</default>
+      <summary>Vom Konto erreichbare Admin-Bereiche (von der Erweiterung ermittelt): time-tracking, approvals</summary>
+    </key>
   </schema>
 </schemalist>

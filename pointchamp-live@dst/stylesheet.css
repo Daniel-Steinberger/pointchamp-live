@@ -15,9 +15,13 @@
 .pointchamp-dot { width: 10px; height: 10px; border-radius: 999px; margin: 0 3px; }
 .pointchamp-dot-work { background-color: #57e389; }
 .pointchamp-dot-pause { background-color: #ffa348; }
+.pointchamp-dot-home { background-color: #62a0ea; }
+.pointchamp-dot-travel { background-color: #dc8add; }
 .pointchamp-dot-done { background-color: rgba(255,255,255,0.35); }
 .pointchamp-status-icon { icon-size: 16px; color: rgba(255,255,255,0.55); }
 .pointchamp-status-icon.work { color: #57e389; }
+.pointchamp-status-icon.home { color: #62a0ea; }
+.pointchamp-status-icon.travel { color: #dc8add; }
 .pointchamp-status-icon.pause { color: #ffa348; }
 .pointchamp-legend { spacing: 16px; padding: 4px 12px 8px; color: rgba(255,255,255,0.55); font-size: 0.85em; }
 .pointchamp-legend-item { spacing: 6px; }

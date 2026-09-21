@@ -145,6 +145,58 @@ export class PointChampWeb {
         return res.text;
     }
 
+    /**
+     * Klassifiziert das Konto: welche Admin-Bereiche darf es sehen? 403 = keine Berechtigung.
+     * Ergebnis wird je Web-Instanz gecacht.
+     */
+    async capabilities(cancellable = null) {
+        if (this._caps)
+            return this._caps;
+        if (!this._loggedIn)
+            await this.login(cancellable);
+        const probe = async path => {
+            const res = await this._send('GET', path, {cancellable});
+            return res.status === 200 && !res.uri.includes('/login');
+        };
+        const [timeTracking, approvals] = await Promise.all([
+            probe('/de/administration/time/tracking/?linesPerPage=4'),
+            probe('/de/administration/holiday/?linesPerPageOpen=4'),
+        ]);
+        this._caps = {timeTracking, approvals};
+        return this._caps;
+    }
+
+    /** Übersichtsseite der Admin-Zeiterfassung: Name → PointChamp-User-ID (nur Personen mit Buchung am Tag). */
+    async trackingUserIds(date, cancellable = null) {
+        const html = await this.get(`/de/administration/time/tracking/?date=${date}&type=1&department=0&linesPerPage=1000`, cancellable);
+        const map = new Map();
+        for (const row of html.matchAll(/<tr[^>]*class="[^"]*kt-datatable__row[^"]*"[^>]*>(.*?)<\/tr>/gs)) {
+            const uid = /\/de\/administration\/time\/tracking\/detail\/(\d+)\//.exec(row[1]);
+            const name = /kt-user-card-v2__name[^>]*>(.*?)<\/span>/s.exec(row[1]);
+            if (uid && name)
+                map.set(stripTags(name[1]).replace(/\s+/g, ' '), uid[1]);
+        }
+        return map;
+    }
+
+    /**
+     * Zeitkategorie je Segment aus der Tages-Detailansicht. Die Zeilen-IDs (`id-138200`) sind die
+     * Segment-IDs der externen API. Rückgabe: Map(segmentId → 'Homeoffice' | 'Office' | 'Unterwegs' | null).
+     */
+    async segmentCategories(uid, date, cancellable = null) {
+        const html = await this.get(`/de/administration/time/tracking/detail/${uid}/${date}?timeType=Zeiterfassung&typeID=0`, cancellable);
+        const start = html.indexOf('Zeitkategorie');
+        const map = new Map();
+        for (const row of html.slice(start).matchAll(/<tr[^>]*id="id-(\d+)"[^>]*>(.*?)<\/tr>/gs)) {
+            const cells = [...row[2].matchAll(/<td[^>]*>(.*?)<\/td>/gs)].map(m => stripTags(m[1]));
+            const cat = cells[1] ?? '';
+            if (cat === 'Pause')
+                continue;
+            map.set(Number(row[1]), cat && cat !== '-' ? cat : null);
+        }
+        return map;
+    }
+
     async openRequests(kind, cancellable = null) {
         const html = await this.get(REQUEST_KINDS[kind].page, cancellable);
         return parseOpenRequests(html, kind);
