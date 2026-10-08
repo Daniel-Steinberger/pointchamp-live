@@ -96,8 +96,10 @@ class Timeline extends St.DrawingArea {
             else if (!seg.pause && seg.category === 'Unterwegs')
                 color = COLORS.travel;
             if (done) {
-                // beendete Tage gedimmt, Kategorie bleibt erkennbar
-                color = seg.pause ? COLORS.donePause : (seg.category ? [color[0], color[1], color[2], 0.45] : COLORS.doneWork);
+                // beendete Tage gedimmt; nur Homeoffice und Unterwegs behalten ihre Farbe,
+                // Office und „keine Kategorie" sind auch im laufenden Tag nicht unterscheidbar
+                const keepColor = !seg.pause && (seg.category === 'Homeoffice' || seg.category === 'Unterwegs');
+                color = seg.pause ? COLORS.donePause : (keepColor ? [color[0], color[1], color[2], 0.45] : COLORS.doneWork);
             }
             if (seg.open) {
                 const grad = new Cairo.LinearGradient(x0, 0, x0 + width, 0);
