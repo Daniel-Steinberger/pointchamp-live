@@ -43,6 +43,10 @@ Benutzername und Passwort eintragen und „Speichern & prüfen" klicken. Das Pas
 GNOME-Schlüsselbund, die Abteilungsliste wird beim ersten erfolgreichen Abruf gefüllt und kann
 unter „Personen" gefiltert werden.
 
+Server ist seit dem 2026-11-16 `https://dvs.pointchamp.app` (vorher `dvs.pointchamp.de`, dort
+kommen keine neuen Daten mehr an). Der Schlüsselbund-Eintrag gilt je Server und Benutzer: Nach
+einem Wechsel der Server-Adresse das Passwort in den Einstellungen einmal neu eingeben.
+
 ### Schlüsselbund nur außerhalb der Shell
 
 libsecret darf **nicht** im Shell-Prozess laufen: Beim Login (Schlüsselbund noch nicht bereit)

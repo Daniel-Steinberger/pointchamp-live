@@ -2,7 +2,7 @@
 <schemalist gettext-domain="pointchamp-live">
   <schema id="org.gnome.shell.extensions.pointchamp-live" path="/org/gnome/shell/extensions/pointchamp-live/">
     <key name="server-url" type="s">
-      <default>'https://dvs.pointchamp.de'</default>
+      <default>'https://dvs.pointchamp.app'</default>
       <summary>PointChamp-Server</summary>
     </key>
     <key name="username" type="s">

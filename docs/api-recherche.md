@@ -4,6 +4,14 @@ Stand: 2026-09-02. Getestet gegen https://dvs.pointchamp.de mit dem Service-Kont
 `~/src/dvs/dvs-ansible/playbooks/files/dvs-config-local.py` (Abschnitt `pointchamp`).
 Zugangsdaten stehen dort im Klartext – **nicht** hierher kopieren.
 
+> **Umzug am 2026-11-16:** PointChamp läuft jetzt unter **https://dvs.pointchamp.app**.
+> Die alte Adresse `dvs.pointchamp.de` antwortet weiter, ist aber eingefroren: Die externe API
+> nimmt den Login an, liefert ab dem 16.11. aber keine Buchungen und keine Abwesenheiten mehr.
+> Der Web-Login leitet nach erfolgreicher Anmeldung auf `dvs.pointchamp.app/login` weiter, wo
+> keine Sitzung besteht. Das sieht dann aus wie falsche Zugangsdaten. Pfade, Konten und
+> Antwortformate sind auf `.app` unverändert (API und Web-Login am 2026-11-16 geprüft).
+> Alle Angaben unten gelten sinngemäß für die neue Adresse.
+
 ## Vorhandener Code im Monorepo `~/src/dvs`
 
 | Ort | Inhalt |

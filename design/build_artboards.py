@@ -340,7 +340,7 @@ def prefs_account():
       <p class="grp-title">PointChamp-Zugang</p>
       <p class="grp-desc">Das Passwort wird im GNOME-Schlüsselbund gespeichert, nicht in den Einstellungen.</p>
       <div class="list">
-        <div class="row"><div class="t"><span>Server</span></div><span class="entry">https://dvs.pointchamp.de</span></div>
+        <div class="row"><div class="t"><span>Server</span></div><span class="entry">https://dvs.pointchamp.app</span></div>
         <div class="row"><div class="t"><span>Benutzername</span></div><span class="entry">vorname.nachname@dvs.ag</span></div>
         <div class="row"><div class="t"><span>Passwort</span></div><span class="entry">••••••••••••</span></div>
         <div class="row"><div class="t"><span>Verbindung</span><span class="s">Zuletzt erfolgreich 17:58 · Token gültig bis 18:54</span></div><span class="tag" style="color:{GREEN}">Verbunden</span></div>
