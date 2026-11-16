@@ -63,17 +63,42 @@ export function parseOpenRequests(html, kind) {
         const nameMatch = /kt-user-card-v2__name[^>]*>(.*?)<\/span>/s.exec(row);
         const deptMatch = /kt-user-card-v2__desc[^>]*>(.*?)<\/span>/s.exec(row);
         const texts = cells.map(stripTags);
-        const dates = texts.filter(t => /^\d{2}\.\d{2}\.\d{4}$/.test(t));
-        const days = texts.find((t, i) => /^\d+(,\d+)?$/.test(t) && i > 0 && dates.length && texts.indexOf(dates[dates.length - 1]) < i);
+        // Spalten über die Köpfe ansprechen: Die Abwesenheitsliste hat „Art | Eingereicht | Zeitraum |
+        // Uhrzeit | Tage“, die Urlaubsliste „Von | Bis | Tage | Art“. Das Einreichungsdatum darf nie
+        // als Beginn gelesen werden.
+        const at = title => {
+            const i = headers.indexOf(title);
+            return i >= 0 && i < texts.length ? texts[i] : '';
+        };
+        const submittedIdx = headers.indexOf('Eingereicht');
+        let from = '', to = '';
+        const range = /(\d{2}\.\d{2}\.\d{4})\s*-\s*(\d{2}\.\d{2}\.\d{4})/.exec(at('Zeitraum'));
+        if (range) {
+            [from, to] = [range[1], range[2]];
+        } else if (/^\d{2}\.\d{2}\.\d{4}$/.test(at('Von'))) {
+            from = at('Von');
+            to = /^\d{2}\.\d{2}\.\d{4}$/.test(at('Bis')) ? at('Bis') : from;
+        } else {
+            const dates = texts.filter((t, i) => i !== submittedIdx && /^\d{2}\.\d{2}\.\d{4}$/.test(t));
+            from = dates[0] ?? '';
+            to = dates[1] ?? from;
+        }
+        let days = at('Tage');
+        if (!/^\d+(,\d+)?$/.test(days)) {
+            const lastDate = texts.lastIndexOf(to);
+            days = texts.find((t, i) => /^\d+(,\d+)?$/.test(t) && i > 0 && to && lastDate < i) ?? '';
+        }
+        const time = /^\d{2}:\d{2}\s*-\s*\d{2}:\d{2}$/.test(at('Uhrzeit')) ? at('Uhrzeit').replace(/\s*-\s*/, '–') : '';
         requests.push({
             id: cb[1],
             kind,
             name: nameMatch ? stripTags(nameMatch[1]) : texts[0] ?? '',
             department: deptMatch ? stripTags(deptMatch[1]) : '',
-            from: dates[0] ?? '',
-            to: dates[1] ?? dates[0] ?? '',
-            days: days ?? '',
-            type: texts.length ? texts[texts.length - 1] : spec.label,
+            from,
+            to,
+            time,
+            days,
+            type: at('Art') || texts.filter(Boolean).at(-1) || spec.label,
             cells: texts,
             headers,
         });

@@ -37,7 +37,7 @@ import('resource:///org/gnome/shell/ui/main.js').then(({panel}) => {
   ind._lastError = null;
   ind._requests = [
     {id:'1500', kind:'holiday', name:'Max Muster', department:'IT', from:plus(7), to:plus(11), days:'5', type:'Urlaub'},
-    {id:'77', kind:'absence', name:'Erika Beispiel', department:'IT Systemadministration', from:plus(1), to:plus(1), days:'1', type:'Freizeitausgleich'},
+    {id:'77', kind:'absence', name:'Erika Beispiel', department:'IT Systemadministration', from:plus(1), to:plus(1), time:'09:00–17:00', days:'1', type:'Freizeitausgleich'},
   ];
   if (ind._updateDot) { ind._updateDot(); ind._renderRequests(); }
   if (ind._catCache) for (const [id, c] of [[901,null],[902,'Homeoffice'],[903,'Homeoffice'],[904,'Unterwegs'],[905,'Homeoffice'],[906,'Office'],[921,'Office'],[923,'Office']]) ind._catCache.set(id, c);

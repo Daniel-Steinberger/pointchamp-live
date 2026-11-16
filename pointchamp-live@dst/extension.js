@@ -396,8 +396,9 @@ class Indicator extends PanelMenu.Button {
         const text = new St.BoxLayout({vertical: true, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
         text.add_child(new St.Label({text: req.name, style_class: 'pointchamp-request-text'}));
         const range = req.to && req.to !== req.from ? `${req.from} – ${req.to}` : req.from;
+        const time = req.time ? `, ${req.time}` : '';
         const days = req.days ? ` · ${req.days} ${req.days === '1' ? 'Tag' : 'Tage'}` : '';
-        text.add_child(new St.Label({text: `${req.type} · ${range}${days}${req.department ? ` · ${req.department}` : ''}`, style_class: 'pointchamp-request-sub'}));
+        text.add_child(new St.Label({text: `${req.type} · ${range}${time}${days}${req.department ? ` · ${req.department}` : ''}`, style_class: 'pointchamp-request-sub'}));
         item.add_child(text);
         item.add_child(this._actionButton('Genehmigen', 'accept', req));
         item.add_child(this._actionButton('Ablehnen', 'decline', req));
