@@ -101,9 +101,9 @@ Spalten der offenen Ab-/Anwesenheiten (2026-11-16 beobachtet): `Name | PN | Art 
 Zeitraum | Uhrzeit | Tage | Info | Erreichbar | Dokument(e)`, Zeitraum als
 `TT.MM.JJJJ - TT.MM.JJJJ`, Uhrzeit als `HH:MM - HH:MM`. Das Einreichungsdatum steht vor dem
 Zeitraum und wurde anfangs als Beginn gelesen. `parseOpenRequests` liest deshalb über die
-Spaltenköpfe (`Zeitraum`, sonst `Von`/`Bis`) und lässt `Eingereicht` aus. Die Spalten der
-Urlaubsliste ließen sich am 16.11. nicht prüfen, weil keine offenen Urlaubsanträge da waren;
-ohne offene Anträge liefert die Seite gar keine Tabelle.
+Spaltenköpfe (`Zeitraum`, sonst `Von`/`Bis`) und lässt `Eingereicht` aus. Urlaubsanträge
+wurden am 16.11. mit dem richtigen Zeitraum angezeigt (zwei Anträge für Dezember). Ohne offene
+Anträge liefert die Seite gar keine Tabelle.
 
 ## Nachtrag 2026-09-21: Stempel-Kategorie je Segment
 
